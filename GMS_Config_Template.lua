@@ -30,22 +30,86 @@ GMS_CONFIG = {
   -- counter : increase the flag value every time the event fires
   -- pulse   : set briefly, then reset to 0
   flagRules = {
+    -- Mission / player slot
     ["mission.started"] = { flag = "mission_started", mode = "latch" },
     ["player.enter_unit"] = { flag = "player_entered", mode = "latch" },
-    ["player.runway_takeoff"] = { flag = "airborne", mode = "latch" },
-    ["player.land"] = { flag = "landed", mode = "latch" },
-    ["player.dead"] = { flag = "player_dead", mode = "latch" },
+    ["player.took_control"] = { flag = "player_took_control", mode = "latch" },
 
+    -- Airframe-specific events use the normalized DCS type name.
+    -- Replace f_a_18c with your detected type, e.g. f_16c_50 or a_10c_2.
+    ["player.airframe.a_10c_2"] = { flag = "hawg_c2_active", mode = "latch" },
+    ["player.airframe.a_10c"] = { flag = "hawg_ff_active", mode = "latch" },
+    ["player.airframe.a_10a"] = { flag = "hawg_fc_active", mode = "latch" },
+
+    -- Engine / takeoff / landing
+    ["player.engine.startup"] = { flag = "engine_started", mode = "latch" },
+    ["player.engine.shutdown"] = { flag = "engine_shutdown", mode = "latch" },
+    ["player.runway_takeoff"] = { flag = "airborne", mode = "latch" },
+    ["player.takeoff"] = { flag = "takeoff_confirmed", mode = "latch" },
+    ["player.land"] = { flag = "landed", mode = "latch" },
+
+    -- Landing-place events use the normalized DCS airbase/carrier/FARP name.
+    -- Example: if debug shows player.land_at.batumi, map that exact event.
+    -- ["player.land_at.batumi"] = { flag = "landed_batumi", mode = "latch" },
+
+    -- Refueling / AAR
+    -- These two rules use the same flag as a true/false state.
+    ["player.refueling.start"] = { flag = "refueling_active", mode = "state" },
+    ["player.refueling.stop"] = { flag = "refueling_active", mode = "state" },
+    ["player.aar.fuel_received"] = { flag = "aar_fuel_received", mode = "latch" },
+
+    -- General weapon events
     ["player.weapon.fired"] = { flag = "weapons_fired", mode = "counter" },
+    ["player.weapon.gun_start"] = { flag = "gun_started", mode = "pulse", seconds = 2 },
+    ["player.weapon.gun_end"] = { flag = "gun_ended", mode = "pulse", seconds = 2 },
     ["player.weapon.hit"] = { flag = "weapon_hits", mode = "counter" },
     ["player.weapon.kill"] = { flag = "weapon_kills", mode = "counter" },
+    ["player.hit"] = { flag = "player_hit", mode = "counter" },
+    ["player.weapon.friendly_fire"] = { flag = "friendly_fire", mode = "latch" },
+    ["player.weapon.roe_violation"] = { flag = "roe_violation", mode = "latch" },
 
+    -- Weapon classification events
+    ["player.weapon.fired.fox1"] = { flag = "fox1_fired", mode = "counter" },
+    ["player.weapon.fired.fox2"] = { flag = "fox2_fired", mode = "pulse" },
+    ["player.weapon.fired.fox3"] = { flag = "fox3_fired", mode = "counter" },
+    ["player.weapon.fired.rifle"] = { flag = "rifle_fired", mode = "pulse" },
+    ["player.weapon.fired.magnum"] = { flag = "magnum_fired", mode = "pulse" },
+    ["player.weapon.fired.bruiser"] = { flag = "bruiser_fired", mode = "counter" },
+    ["player.weapon.fired.bombs"] = { flag = "bombs_fired", mode = "pulse" },
+    ["player.weapon.dropped.bombs"] = { flag = "bombs_dropped", mode = "counter" },
+    ["player.weapon.fired.rockets"] = { flag = "rockets_fired", mode = "pulse" },
+
+    -- Winchester / ammunition
+    ["player.winchester.aa"] = { flag = "winchester_aa", mode = "latch" },
+    ["player.winchester.ag"] = { flag = "winchester_ag", mode = "latch" },
+
+    -- Fuel
     ["player.fuel.joker"] = { flag = "joker_fuel", mode = "latch" },
     ["player.fuel.bingo"] = { flag = "bingo_fuel", mode = "latch" },
     ["player.fuel.emergency"] = { flag = "emergency_fuel", mode = "latch" },
 
+    -- Damage / death
+    ["player.ejected"] = { flag = "player_ejected", mode = "latch" },
+    ["player.crashed"] = { flag = "player_crashed", mode = "latch" },
+    ["player.dead"] = { flag = "player_dead", mode = "latch" },
+    ["player.pilot_dead"] = { flag = "pilot_dead", mode = "latch" },
+
+    -- Zone-specific events. Replace "target" / "nfz" / "corridor" with the
+    -- id values configured below in zones.
     ["player.zone.target.enter"] = { flag = "target_entered", mode = "latch" },
+    ["player.zone.target.leave"] = { flag = "target_left", mode = "latch" },
     ["player.zone.nfz.violation"] = { flag = "no_fly_violation", mode = "latch" },
+    ["player.zone.corridor.leave"] = { flag = "corridor_left", mode = "latch" },
+    ["player.zone.corridor.violation"] = { flag = "corridor_violation", mode = "latch" },
+
+    -- Pattern examples for your own zone ids:
+    -- ["player.zone.my_zone.enter"] = { flag = "my_zone_entered", mode = "latch" },
+    -- ["player.zone.my_zone.leave"] = { flag = "my_zone_left", mode = "latch" },
+    -- ["player.zone.my_zone.violation"] = { flag = "my_zone_violation", mode = "latch" },
+
+    -- Objective watches. These event names come from the watches section below.
+    ["objective.target_1.destroyed"] = { flag = "target_1_destroyed", mode = "latch" },
+    ["objective.armor.destroyed"] = { flag = "armor_group_destroyed", mode = "latch" },
   },
 
   -- DCS trigger zones to watch.
@@ -55,8 +119,8 @@ GMS_CONFIG = {
   --       player.zone.target.enter and player.zone.target.leave
   zones = {
     { name = "TARGET_ZONE", id = "target" },
-    -- { name = "NO_FLY_ZONE", id = "nfz", violationOnEnter = true },
-    -- { name = "SAFE_CORRIDOR", id = "corridor", violationOnLeave = true },
+    { name = "NO_FLY_ZONE", id = "nfz", violationOnEnter = true },
+    { name = "SAFE_CORRIDOR", id = "corridor", violationOnLeave = true },
   },
 
   -- Polling rules for altitude/speed conditions in zones.
@@ -85,10 +149,14 @@ GMS_CONFIG = {
   -- Simple polling watches for objectives.
   watches = {
     unitsDestroyed = {
-      -- { name = "Target-1", event = "objective.target_1.destroyed" },
+      -- name: exact DCS unit name
+      -- event: GMS event emitted when that unit is destroyed
+      { name = "Target-1", event = "objective.target_1.destroyed" },
     },
     groupsDestroyed = {
-      -- { name = "Armor Group", event = "objective.armor.destroyed" },
+      -- name: exact DCS group name
+      -- event: GMS event emitted when all units in that group are destroyed
+      { name = "Armor Group", event = "objective.armor.destroyed" },
     },
     staticsDestroyed = {
       -- { name = "Ammo Depot", event = "objective.ammo_depot.destroyed" },
