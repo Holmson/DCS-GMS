@@ -144,6 +144,128 @@ Mission Editor examples:
 - `pulse`: use `FLAG IS TRUE (target_entered)` for a short trigger window,
   then it resets.
 
+## Zones Config
+
+Zone names are created in the DCS Mission Editor, not in this script. Add a
+trigger zone in the Mission Editor and give it a clear name, for example
+`TARGET_ZONE`, `FENCE_IN_ZONE`, or `NO_FLY_ZONE`.
+
+Then reference that exact Mission Editor zone name in `GMS_CONFIG.zones`:
+
+```lua
+GMS_CONFIG = {
+  zones = {
+    { name = "TARGET_ZONE", id = "target" },
+    { name = "NO_FLY_ZONE", id = "nfz", violationOnEnter = true },
+    { name = "SAFE_CORRIDOR", id = "corridor", violationOnLeave = true },
+  },
+
+  flagRules = {
+    ["player.zone.enter"] = { flag = "any_zone_entered", mode = "counter" },
+    ["player.zone.target.enter"] = { flag = "target_entered", mode = "latch" },
+    ["player.zone.nfz.violation"] = {
+      flag = "no_fly_violation",
+      mode = "latch",
+    },
+    ["player.zone.corridor.violation"] = {
+      flag = "corridor_left",
+      mode = "latch",
+    },
+  },
+}
+```
+
+`name` is the real DCS trigger zone name. It must match the Mission Editor zone
+exactly.
+
+`id` is the short GMS name used in event names. It should be simple lowercase
+text without spaces, for example `target`, `ip`, `fence_in`, or `nfz`.
+
+Generic zone events fire for any configured zone:
+
+- `player.zone.enter`
+- `player.zone.leave`
+- `player.zone.violation`
+
+Specific zone events include the zone `id`:
+
+- `player.zone.target.enter`
+- `player.zone.target.leave`
+- `player.zone.nfz.violation`
+
+Use generic events when you only care that the player entered or left any
+configured zone. Use specific events when a Mission Editor trigger should react
+to one exact zone.
+
+## Zone Rules Config
+
+`zoneRules` are polling checks for conditions inside zones. They are useful for
+rules like "player is below 300 meters inside target zone" or "player is faster
+than 800 km/h inside safe corridor".
+
+Example:
+
+```lua
+GMS_CONFIG = {
+  zoneRules = {
+    {
+      id = "low_in_target",
+      zone = "TARGET_ZONE",
+      altitudeBelowMeters = 300,
+    },
+    {
+      id = "too_fast_in_corridor",
+      zone = "SAFE_CORRIDOR",
+      speedAboveKph = 800,
+    },
+  },
+
+  flagRules = {
+    ["player.zone_rule.low_in_target"] = {
+      flag = "low_in_target",
+      mode = "state",
+    },
+    ["player.zone_rule.low_in_target.enter"] = {
+      flag = "low_warning",
+      mode = "pulse",
+      seconds = 5,
+    },
+    ["player.zone_rule.too_fast_in_corridor"] = {
+      flag = "too_fast",
+      mode = "state",
+    },
+  },
+}
+```
+
+`id` is the rule name used by GMS to build event names. For example:
+
+- `id = "low_in_target"` creates `player.zone_rule.low_in_target`
+- it also creates `player.zone_rule.low_in_target.enter`
+- and `player.zone_rule.low_in_target.clear`
+
+The main rule event, for example `player.zone_rule.low_in_target`, is best used
+with `mode = "state"`, because it becomes true when the rule matches and false
+when the rule clears.
+
+The `.enter` event fires once when the rule first becomes true. The `.clear`
+event fires once when it becomes false again.
+
+You can also set a custom event name:
+
+```lua
+{
+  id = "low_in_target",
+  zone = "TARGET_ZONE",
+  altitudeBelowMeters = 300,
+  event = "mission.low_altitude_warning",
+}
+```
+
+Then use `mission.low_altitude_warning`,
+`mission.low_altitude_warning.enter`, and `mission.low_altitude_warning.clear`
+in `flagRules`.
+
 ## Event Reference
 
 Recommended flag mode is only a starting point. You can map any event to any
@@ -292,6 +414,12 @@ These are emitted for `player.weapon.fired.*` and, where applicable,
 
 ### Zones
 
+Zones are configured in `GMS_CONFIG.zones`. The `name` is the DCS Mission Editor
+trigger zone name. The `id` is the shorter GMS name used in event names.
+
+Generic zone events do not include a zone id and fire for every configured zone.
+Specific zone events include the zone id and only fire for that one zone.
+
 - `player.zone.enter`: player entered any configured zone. Suggested mode:
   `counter` or `pulse`.
 - `player.zone.leave`: player left any configured zone. Suggested mode:
@@ -308,6 +436,9 @@ These are emitted for `player.weapon.fired.*` and, where applicable,
 ### Zone Rules
 
 Zone rules are polling checks for altitude/speed constraints in zones.
+The `<rule_id>` part comes from the `id` value in `GMS_CONFIG.zoneRules`.
+For example, `id = "low_in_target"` creates
+`player.zone_rule.low_in_target`.
 
 - `player.zone_rule.<rule_id>`: rule changed true/false. Suggested mode:
   `state`.
