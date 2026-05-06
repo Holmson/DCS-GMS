@@ -10,6 +10,8 @@ Quick start:
 
 GMS_CONFIG = {
   debug = true,
+  debugToScreen = true,
+  debugScreenSeconds = 5,
 
   -- Optional filters. If these are empty, the script tracks units once DCS
   -- reports them as player-controlled via getPlayerName() or player events.
@@ -100,6 +102,8 @@ GMS.missionStartedEmitted = GMS.missionStartedEmitted or false
 
 local DEFAULT_CONFIG = {
   debug = false,
+  debugToScreen = false,
+  debugScreenSeconds = 5,
   autoStart = true,
   logPrefix = "GMS",
   pollInterval = 2,
@@ -196,8 +200,13 @@ local function dcsLog(level, message)
     env.warning(text)
   elseif env and env.error and level == "error" then
     env.error(text)
-  elseif trigger and trigger.action and trigger.action.outText and GMS.config.debug then
-    trigger.action.outText(text, 10)
+  elseif env and env.info then
+    env.info(text)
+  end
+
+  if GMS.config.debugToScreen and trigger and trigger.action and trigger.action.outText then
+    local seconds = tonumber(GMS.config.debugScreenSeconds) or 5
+    trigger.action.outText(text, seconds)
   end
 end
 

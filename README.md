@@ -8,22 +8,38 @@ mission scripting API: no MIST, no MOOSE.
 1. Optional: add a Mission Editor `DO SCRIPT` action that defines `GMS_CONFIG`.
 2. Add a `DO SCRIPT FILE` action that loads `GeneralMissionScript.lua`.
 
+`GMS_CONFIG` must be loaded before `GeneralMissionScript.lua`, because the main
+script reads the config while it is loading.
+
 ## Minimal Config
+
+This is the smallest useful mission-specific config. Put it into a Mission
+Editor `DO SCRIPT` action before loading `GeneralMissionScript.lua`.
+
+You do not need to understand all Lua details to start. In this block you mostly
+edit three things:
+
+- the event name in square brackets, for example `["player.runway_takeoff"]`
+- the flag name or number after `flag =`
+- the behavior after `mode =`
 
 ```lua
 GMS_CONFIG = {
   debug = true,
+  debugToScreen = true,
+  debugScreenSeconds = 5,
 
   flagRules = {
-    ["mission.started"] = { flag = 1, mode = "latch" },
-    ["player.enter_unit"] = { flag = 10, mode = "latch" },
-    ["player.runway_takeoff"] = { flag = 20, mode = "latch" },
-    ["player.land"] = { flag = 21, mode = "latch" },
-    ["player.dead"] = { flag = 30, mode = "latch" },
-    ["player.weapon.fired"] = { flag = 100, mode = "counter" },
-    ["player.weapon.hit"] = { flag = 101, mode = "counter" },
-    ["player.weapon.kill"] = { flag = 102, mode = "counter" },
-    ["player.fuel.bingo"] = { flag = 200, mode = "latch" },
+    -- Edit the flag value to the DCS user flag number or name you want.
+    ["mission.started"] = { flag = "mission_started", mode = "latch" },
+    ["player.enter_unit"] = { flag = "player_entered", mode = "latch" },
+    ["player.runway_takeoff"] = { flag = "airborne", mode = "latch" },
+    ["player.land"] = { flag = "landed", mode = "latch" },
+    ["player.dead"] = { flag = "player_dead", mode = "latch" },
+    ["player.weapon.fired"] = { flag = "weapons_fired", mode = "counter" },
+    ["player.weapon.hit"] = { flag = "weapon_hits", mode = "counter" },
+    ["player.weapon.kill"] = { flag = "weapon_kills", mode = "counter" },
+    ["player.fuel.bingo"] = { flag = "bingo_fuel", mode = "latch" },
   },
 
   zones = {
@@ -32,81 +48,281 @@ GMS_CONFIG = {
 }
 ```
 
+Lua syntax notes:
+
+- text values use quotes, for example `"airborne"`
+- every entry inside `flagRules` usually ends with a comma
+- lines that start with `--` are comments and are ignored by DCS
+- `{ ... }` creates a table; in this project it is used for config blocks
+
+If you only want to add a new Mission Editor flag, add one line inside
+`flagRules`:
+
+```lua
+["gms.event.name"] = { flag = "your_flag_name", mode = "latch" },
+```
+
+Then replace `gms.event.name`, `your_flag_name`, and `latch` with the event,
+flag, and mode you need.
+
+## Debug Output
+
+- `debug = true` enables verbose GMS event logging via `env.info` in `dcs.log`.
+- `debugToScreen = true` also shows those messages in-game via
+  `trigger.action.outText`.
+- `debugScreenSeconds = 5` controls how long each on-screen debug message stays
+  visible.
+
+## Flag Rules
+
+`flagRules` define which GMS event should write to which DCS user flag.
+
+```lua
+flagRules = {
+  ["player.runway_takeoff"] = { flag = "airborne", mode = "latch" },
+  ["player.weapon.fired"] = { flag = "weapons_fired", mode = "counter" },
+  ["player.alive"] = { flag = "player_alive", mode = "state" },
+}
+```
+
+The left side, for example `player.runway_takeoff`, is the GMS event name. The
+`flag = ...` value is the DCS user flag you use in the Mission Editor.
+
+You can use numeric flags:
+
+```lua
+["player.runway_takeoff"] = { flag = 20, mode = "latch" }
+```
+
+Or named flags:
+
+```lua
+["player.runway_takeoff"] = { flag = "airborne", mode = "latch" }
+```
+
+Named flags are easier to read in mission configs. Numeric flags are still fine
+if you prefer the classic Mission Editor style.
+
 ## Flag Modes
 
-- `latch`: set flag to `1`, or to `value` if provided.
-- `state`: set flag to `1` when `event.state == true`, otherwise `0`.
-- `counter`: increment the current flag value.
-- `pulse`: set flag briefly, then reset it to `0`.
-- `clear`: set flag to `0`.
+- `latch`: set flag to `1`, or to `value` if provided. Good for one-time events
+  like takeoff, landing, objective complete, or player dead.
+- `state`: set flag to `1` when `event.state == true`, otherwise `0`. Good for
+  true/false states like alive, airborne, on ground, in zone, or rule active.
+- `counter`: increment the current flag value. Good for repeated events like
+  weapons fired, hits, kills, zone entries, or engine starts.
+- `pulse`: set flag briefly, then reset it to `0`. Good for short trigger
+  windows when you only want one Mission Editor action to react.
+- `clear`: set flag to `0`. Useful for custom reset events.
 - `value`: set flag to `event.value` or configured `value`.
 
-## Core Event Names
+## Mission Editor Usage
 
-- `gms.started`
-- `mission.started`
-- `mission.ended`
-- `player.enter_unit`
-- `player.leave_unit`
-- `player.took_control`
-- `player.airframe_detected`
-- `player.airframe.<type_name>`
-- `player.alive`
-- `player.engine.startup`
-- `player.engine.shutdown`
-- `player.runway_takeoff`
-- `player.takeoff`
-- `player.runway_touch`
-- `player.land`
-- `player.land_at.<place_name>`
-- `player.airborne`
-- `player.on_ground`
-- `player.airborne_state`
-- `player.on_ground_state`
-- `player.ejected`
-- `player.crashed`
-- `player.dead`
-- `player.pilot_dead`
+GMS events are internal event names. The Mission Editor only sees DCS user
+flags, so every event you want to use in a trigger needs a `flagRules` entry.
 
-## Weapon Event Names
+Example:
 
-- `player.weapon.fired`
-- `player.weapon.dropped`
-- `player.weapon.gun_start`
-- `player.weapon.gun_end`
-- `player.weapon.hit`
-- `player.weapon.kill`
-- `player.weapon.friendly_fire`
-- `player.weapon.roe_violation`
-- `player.weapon.fired.fox1`
-- `player.weapon.fired.fox2`
-- `player.weapon.fired.fox3`
-- `player.weapon.fired.rifle`
-- `player.weapon.fired.magnum`
-- `player.weapon.fired.bruiser`
-- `player.winchester.all`
-- `player.winchester.aa`
-- `player.winchester.ag`
-- `player.winchester.guided`
-- `player.winchester.bombs`
+```lua
+GMS_CONFIG = {
+  flagRules = {
+    ["player.runway_takeoff"] = { flag = "airborne", mode = "latch" },
+    ["player.weapon.fired"] = { flag = "weapons_fired", mode = "counter" },
+    ["player.alive"] = { flag = "player_alive", mode = "state" },
+    ["player.zone.target.enter"] = { flag = "target_entered", mode = "pulse", seconds = 3 },
+  },
+}
+```
 
-## Fuel, AAR, Zones, Objectives
+Mission Editor examples:
 
-- `player.fuel.joker`
-- `player.fuel.bingo`
-- `player.fuel.emergency`
-- `player.fuel.increased`
-- `player.refueling.start`
-- `player.refueling.stop`
-- `player.aar.fuel_received`
-- `player.zone.enter`
-- `player.zone.leave`
-- `player.zone.<zone_id>.enter`
-- `player.zone.<zone_id>.leave`
-- `player.zone.violation`
-- `player.zone.<zone_id>.violation`
-- `player.zone_rule.<rule_id>`
-- `objective.<target_name>.destroyed`
+- `latch`: use `FLAG IS TRUE (airborne)` after the player has taken off once.
+- `counter`: use `FLAG MORE THAN (weapons_fired, 2)` after three weapon
+  releases.
+- `state`: use `FLAG IS TRUE (player_alive)` while the state is true, and
+  `FLAG IS FALSE (player_alive)` when it clears.
+- `pulse`: use `FLAG IS TRUE (target_entered)` for a short trigger window,
+  then it resets.
+
+## Event Reference
+
+Recommended flag mode is only a starting point. You can map any event to any
+mode if your mission logic needs it.
+
+### System / Mission
+
+- `gms.started`: GMS loaded and event handler registered. Suggested mode:
+  `latch`. Mission Editor: `FLAG IS TRUE`.
+- `mission.started`: mission/GMS start signal. Suggested mode: `latch`.
+  Mission Editor: `FLAG IS TRUE`.
+- `mission.ended`: DCS mission end event. Suggested mode: `latch`.
+  Mission Editor: `FLAG IS TRUE`.
+
+### Player / Slot / Airframe
+
+- `player.enter_unit`: player entered a unit. Suggested mode: `latch`.
+- `player.leave_unit`: player left a tracked unit. Suggested mode: `latch`
+  or `pulse`.
+- `player.leave_unit.unknown`: player left event without a known tracked unit.
+  Suggested mode: `pulse`.
+- `player.took_control`: player took direct control. Suggested mode: `latch`.
+- `player.airframe_detected`: player aircraft type was detected. Suggested
+  mode: `latch`.
+- `player.airframe.<type_name>`: type-specific airframe event, for example
+  `player.airframe.f_a_18c`. Suggested mode: `latch`.
+- `player.alive`: true when player is alive, false after dead/crash/pilot dead.
+  Suggested mode: `state`.
+
+### Engine / Start / Flight / Landing
+
+- `player.engine.startup`: engine startup event. Suggested mode: `latch` or
+  `counter`.
+- `player.engine.shutdown`: engine shutdown event. Suggested mode: `latch` or
+  `counter`.
+- `player.runway_takeoff`: precise airborne moment from runway takeoff.
+  Suggested mode: `latch`.
+- `player.takeoff`: DCS takeoff confirmation event. Suggested mode: `latch`.
+- `player.runway_touch`: runway touchdown. Suggested mode: `pulse` or
+  `counter`.
+- `player.land`: final landing event. Suggested mode: `latch` or `counter`.
+- `player.land_at.<place_name>`: landing at a specific base/carrier/FARP name.
+  Suggested mode: `latch`.
+- `player.airborne`: emitted when player becomes airborne. Suggested mode:
+  `latch` or `pulse`.
+- `player.on_ground`: emitted when player becomes on-ground. Suggested mode:
+  `latch` or `pulse`.
+- `player.airborne_state`: polling state for airborne true/false. Suggested
+  mode: `state`.
+- `player.on_ground_state`: polling state for on-ground true/false. Suggested
+  mode: `state`.
+
+### Refueling / AAR
+
+- `player.refueling.start`: AAR/contact/refueling started. Suggested mode:
+  `state` or `latch`.
+- `player.refueling.stop`: AAR/refueling stopped. Suggested mode: `pulse` or
+  `latch`.
+- `player.aar.fuel_received`: refueling stopped with positive fuel delta.
+  Suggested mode: `latch` or `counter`.
+
+### Weapons
+
+- `player.weapon.fired`: weapon fired. Suggested mode: `counter`.
+- `player.weapon.dropped`: weapon dropped/released. Suggested mode: `counter`.
+- `player.weapon.gun_start`: gun/autocannon firing started. Suggested mode:
+  `pulse` or `latch`.
+- `player.weapon.gun_end`: gun/autocannon firing ended. Suggested mode:
+  `pulse`.
+- `player.weapon.hit`: player hit something. Suggested mode: `counter`.
+- `player.weapon.kill`: player killed/destroyed something. Suggested mode:
+  `counter`.
+- `player.hit`: player was hit. Suggested mode: `latch` or `counter`.
+- `player.weapon.friendly_fire`: player hit/killed same coalition. Suggested
+  mode: `latch` or `counter`.
+- `player.weapon.roe_violation`: weapon release outside configured allowed
+  zone. Suggested mode: `latch` or `counter`.
+
+### Weapon Classification
+
+These are emitted for `player.weapon.fired.*` and, where applicable,
+`player.weapon.dropped.*`.
+
+- `player.weapon.fired.fox1`: semi-active radar A/A missile. Suggested mode:
+  `counter`.
+- `player.weapon.fired.fox2`: IR A/A missile. Suggested mode: `counter`.
+- `player.weapon.fired.fox3`: active radar A/A missile. Suggested mode:
+  `counter`.
+- `player.weapon.fired.rifle`: A/G missile classification. Suggested mode:
+  `counter`.
+- `player.weapon.fired.magnum`: anti-radiation missile classification.
+  Suggested mode: `counter`.
+- `player.weapon.fired.bruiser`: anti-ship missile classification. Suggested
+  mode: `counter`.
+- `player.weapon.fired.guided`: guided weapon. Suggested mode: `counter`.
+- `player.weapon.fired.aa`: air-to-air weapon. Suggested mode: `counter`.
+- `player.weapon.fired.ag`: air-to-ground weapon. Suggested mode: `counter`.
+- `player.weapon.fired.bombs`: bomb class. Suggested mode: `counter`.
+- `player.weapon.dropped.guided`: guided dropped weapon. Suggested mode:
+  `counter`.
+- `player.weapon.dropped.ag`: A/G dropped weapon. Suggested mode: `counter`.
+- `player.weapon.dropped.bombs`: dropped bomb. Suggested mode: `counter`.
+
+### Winchester / Ammunition
+
+- `player.winchester.all`: no relevant weapons left. Suggested mode: `latch`.
+- `player.winchester.aa`: no A/A weapons left. Suggested mode: `latch`.
+- `player.winchester.ag`: no A/G weapons left. Suggested mode: `latch`.
+- `player.winchester.guided`: no guided weapons left. Suggested mode: `latch`.
+- `player.winchester.bombs`: no bombs left. Suggested mode: `latch`.
+- `player.winchester.all_reset`: relevant weapons available again. Suggested
+  mode: `pulse`.
+- `player.winchester.aa_reset`: A/A weapons available again. Suggested mode:
+  `pulse`.
+- `player.winchester.ag_reset`: A/G weapons available again. Suggested mode:
+  `pulse`.
+- `player.winchester.guided_reset`: guided weapons available again. Suggested
+  mode: `pulse`.
+- `player.winchester.bombs_reset`: bombs available again. Suggested mode:
+  `pulse`.
+
+### Fuel
+
+- `player.fuel.joker`: fuel dropped below configured joker threshold.
+  Suggested mode: `latch`.
+- `player.fuel.bingo`: fuel dropped below configured bingo threshold.
+  Suggested mode: `latch`.
+- `player.fuel.emergency`: fuel dropped below configured emergency threshold.
+  Suggested mode: `latch`.
+- `player.fuel.joker_reset`: fuel rose above joker threshold plus reset margin.
+  Suggested mode: `pulse`.
+- `player.fuel.bingo_reset`: fuel rose above bingo threshold plus reset margin.
+  Suggested mode: `pulse`.
+- `player.fuel.emergency_reset`: fuel rose above emergency threshold plus reset
+  margin. Suggested mode: `pulse`.
+- `player.fuel.increased`: fuel increased, for example through AAR. Suggested
+  mode: `counter` or `pulse`.
+
+### Damage / Death
+
+- `player.ejected`: player ejected. Suggested mode: `latch`.
+- `player.crashed`: player crashed. Suggested mode: `latch`.
+- `player.dead`: player unit dead. Suggested mode: `latch`.
+- `player.pilot_dead`: pilot dead event. Suggested mode: `latch`.
+- `player.alive`: use `state` if you want one flag to represent alive/dead.
+
+### Zones
+
+- `player.zone.enter`: player entered any configured zone. Suggested mode:
+  `counter` or `pulse`.
+- `player.zone.leave`: player left any configured zone. Suggested mode:
+  `counter` or `pulse`.
+- `player.zone.<zone_id>.enter`: player entered a specific configured zone.
+  Suggested mode: `latch` or `pulse`.
+- `player.zone.<zone_id>.leave`: player left a specific configured zone.
+  Suggested mode: `latch` or `pulse`.
+- `player.zone.violation`: generic zone violation. Suggested mode: `latch` or
+  `counter`.
+- `player.zone.<zone_id>.violation`: zone-specific violation. Suggested mode:
+  `latch` or `counter`.
+
+### Zone Rules
+
+Zone rules are polling checks for altitude/speed constraints in zones.
+
+- `player.zone_rule.<rule_id>`: rule changed true/false. Suggested mode:
+  `state`.
+- `player.zone_rule.<rule_id>.enter`: rule became true. Suggested mode:
+  `latch` or `pulse`.
+- `player.zone_rule.<rule_id>.clear`: rule became false. Suggested mode:
+  `pulse` or `clear`.
+- Custom rule event names are possible with `event = "..."` in `zoneRules`.
+
+### Objectives / Watches
+
+- `objective.<target_name>.destroyed`: configured unit/group/static object is
+  destroyed. Suggested mode: `latch`.
+- Custom objective event names are possible with `event = "..."` in the watch
+  config.
 
 ## Notes
 
