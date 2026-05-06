@@ -1,93 +1,24 @@
 -- GeneralMissionScript.lua
 -- Reusable single-player mission helper for DCS World.
--- No MIST, no MOOSE. Load with DO SCRIPT FILE after an optional DO SCRIPT config.
+-- No MIST, no MOOSE. Load with DO SCRIPT FILE after a mission config file.
 
 --[[
 Quick start:
 
-1) Add a DO SCRIPT action before loading this file if you want mission-specific
-   settings without editing the library:
+1) Copy GMS_Config_Template.lua for your mission, for example:
+   MyMission_GMS_Config.lua
 
-GMS_CONFIG = {
-  debug = true,
-  debugToScreen = true,
-  debugScreenSeconds = 5,
+2) Edit the copied config file. It must define the global table GMS_CONFIG.
+   This is where you configure flags, zones, fuel thresholds, and watches.
 
-  -- Optional filters. If these are empty, the script tracks units once DCS
-  -- reports them as player-controlled via getPlayerName() or player events.
-  playerUnitNames = {
-    -- ["Player Hornet"] = true,
-  },
-  playerGroupNames = {
-    -- ["Springfield 1"] = true,
-  },
+3) In the Mission Editor, load files in this order:
+   DO SCRIPT FILE -> MyMission_GMS_Config.lua
+   DO SCRIPT FILE -> GeneralMissionScript.lua
 
-  -- Event name -> flag rule. Modes:
-  -- latch   : set flag to value, default 1
-  -- state   : set flag to 1 or 0 from event.state
-  -- counter : increment numeric flag
-  -- pulse   : set to value briefly, then reset to 0
-  flagRules = {
-    ["mission.started"] = { flag = 1, mode = "latch" },
-    ["player.enter_unit"] = { flag = 10, mode = "latch" },
-    ["player.runway_takeoff"] = { flag = 20, mode = "latch" },
-    ["player.land"] = { flag = 21, mode = "latch" },
-    ["player.dead"] = { flag = 30, mode = "latch" },
-    ["player.weapon.fired"] = { flag = 100, mode = "counter" },
-    ["player.weapon.hit"] = { flag = 101, mode = "counter" },
-    ["player.weapon.kill"] = { flag = 102, mode = "counter" },
-    ["player.fuel.bingo"] = { flag = 200, mode = "latch" },
-    ["player.zone.target.enter"] = { flag = 300, mode = "latch" },
-  },
+4) Use Mission Editor triggers against the flags configured in GMS_CONFIG.
 
-  zones = {
-    -- DCS trigger zone named TARGET_ZONE. Emits:
-    -- player.zone.enter, player.zone.leave,
-    -- player.zone.target.enter, player.zone.target.leave
-    { name = "TARGET_ZONE", id = "target" },
-
-    -- Emits violation events when entered.
-    -- { name = "NO_FLY_ZONE", id = "nfz", violationOnEnter = true },
-
-    -- Emits violation events when left.
-    -- { name = "SAFE_CORRIDOR", id = "corridor", violationOnLeave = true },
-  },
-
-  zoneRules = {
-    -- Emits player.zone_rule.low_in_target with state=true/false.
-    -- {
-    --   id = "low_in_target",
-    --   zone = "TARGET_ZONE",
-    --   event = "player.zone_rule.low_in_target",
-    --   altitudeBelowMeters = 300,
-    -- },
-  },
-
-  fuel = {
-    enabled = true,
-    thresholds = {
-      joker = 0.45,
-      bingo = 0.30,
-      emergency = 0.12,
-    },
-  },
-
-  watches = {
-    unitsDestroyed = {
-      -- { name = "Target-1", event = "objective.target_1.destroyed" },
-    },
-    groupsDestroyed = {
-      -- { name = "Armor Group", event = "objective.armor.destroyed" },
-    },
-    staticsDestroyed = {
-      -- { name = "Ammo Depot", event = "objective.ammo_depot.destroyed" },
-    },
-  },
-}
-
-2) Then load this file via DO SCRIPT FILE.
-
-3) Use Mission Editor triggers against the flags you configured above.
+If no config file is loaded first, GMS starts with defaults, but no mission
+flags are mapped.
 --]]
 
 GMS_CONFIG = GMS_CONFIG or {}

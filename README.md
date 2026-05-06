@@ -3,18 +3,44 @@
 Reusable Lua helper for DCS single-player missions. It uses only the native DCS
 mission scripting API: no MIST, no MOOSE.
 
+## Files
+
+- `GeneralMissionScript.lua`: the reusable library. Load it in every mission,
+  but normally do not edit it for mission-specific logic.
+- `GMS_Config_Template.lua`: copy this file per mission, rename it, and edit the
+  copy. This is where your Mission Editor flags, zones, fuel thresholds, and
+  watches go.
+
 ## Load Order
 
-1. Optional: add a Mission Editor `DO SCRIPT` action that defines `GMS_CONFIG`.
-2. Add a `DO SCRIPT FILE` action that loads `GeneralMissionScript.lua`.
+1. Copy `GMS_Config_Template.lua` for your mission, for example
+   `MyMission_GMS_Config.lua`.
+2. Edit your copied config file.
+3. In the Mission Editor, add a `DO SCRIPT FILE` action that loads your config
+   file.
+4. Add a second `DO SCRIPT FILE` action that loads `GeneralMissionScript.lua`.
 
 `GMS_CONFIG` must be loaded before `GeneralMissionScript.lua`, because the main
 script reads the config while it is loading.
 
+Recommended Mission Editor load order:
+
+```text
+MISSION START
+  DO SCRIPT FILE -> MyMission_GMS_Config.lua
+  DO SCRIPT FILE -> GeneralMissionScript.lua
+```
+
+Do not edit `GeneralMissionScript.lua` for mission-specific flags or zones.
+Keep those changes in your copied config file.
+
 ## Minimal Config
 
-This is the smallest useful mission-specific config. Put it into a Mission
-Editor `DO SCRIPT` action before loading `GeneralMissionScript.lua`.
+This is the smallest useful mission-specific config. Put this content into your
+copied config file, for example `MyMission_GMS_Config.lua`.
+
+The repository also contains `GMS_Config_Template.lua`, which already includes
+this structure plus more commented examples.
 
 You do not need to understand all Lua details to start. In this block you mostly
 edit three things:
@@ -56,7 +82,7 @@ Lua syntax notes:
 - `{ ... }` creates a table; in this project it is used for config blocks
 
 If you only want to add a new Mission Editor flag, add one line inside
-`flagRules`:
+`flagRules` in your config file:
 
 ```lua
 ["gms.event.name"] = { flag = "your_flag_name", mode = "latch" },
@@ -67,7 +93,7 @@ flag, and mode you need.
 
 ## Debug Output
 
-- `debug = true` enables verbose GMS event logging via `env.info` in `dcs.log`.
+- `debug = true` enables GMS event logging via `env.info` in `dcs.log`.
 - `debugToScreen = true` also shows those messages in-game via
   `trigger.action.outText`.
 - `debugScreenSeconds = 5` controls how long each on-screen debug message stays
@@ -75,7 +101,8 @@ flag, and mode you need.
 
 ## Flag Rules
 
-`flagRules` define which GMS event should write to which DCS user flag.
+`flagRules` live in your mission config file. They define which GMS event should
+write to which DCS user flag.
 
 ```lua
 flagRules = {
@@ -119,7 +146,8 @@ if you prefer the classic Mission Editor style.
 ## Mission Editor Usage
 
 GMS events are internal event names. The Mission Editor only sees DCS user
-flags, so every event you want to use in a trigger needs a `flagRules` entry.
+flags, so every event you want to use in a trigger needs a `flagRules` entry in
+your config file.
 
 Example:
 
