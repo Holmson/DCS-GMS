@@ -1,6 +1,9 @@
 -- GMS_Config_Template.lua
 -- Copy this file per mission, rename it, edit it, and load it before
 -- GeneralMissionScript.lua with a Mission Editor DO SCRIPT FILE action.
+-- If you use a separate voice-over table, load that voice file before this
+-- config file. The filename can be mission-specific, but the table should be
+-- named GMS_VOICE_OVERS unless you change voice.linesTable below.
 
 GMS_CONFIG = {
   -- Debug is helpful while testing a mission. Turn debugToScreen off for the
@@ -110,6 +113,94 @@ GMS_CONFIG = {
     -- Objective watches. These event names come from the watches section below.
     ["objective.target_1.destroyed"] = { flag = "target_1_destroyed", mode = "latch" },
     ["objective.armor.destroyed"] = { flag = "armor_group_destroyed", mode = "latch" },
+  },
+
+  -- Optional voice-over module.
+  --
+  -- enabled = false keeps GMS voice features completely inactive.
+  -- defaultMode = "sound" uses outSound + outText.
+  -- defaultMode = "radio" uses radioTransmission + outText.
+  -- A mission voice file can have any filename, but should define the
+  -- GMS_VOICE_OVERS table.
+  -- Keep the voice lines there and only map GMS events to voice IDs here.
+  voice = {
+    enabled = false,
+    defaultMode = "sound",
+    subtitle = true,
+    subtitleFormat = "[%s] %s",
+
+    -- Radio mode needs sender zones from the Mission Editor.
+    -- Frequencies are in Hz, so 251 MHz is 251000000.
+    radio = {
+      defaultZone = "RADIO_MAGIC",
+      defaultFrequency = 251000000,
+      defaultModulation = "AM",
+      defaultPower = 100,
+      fallbackToSound = true,
+    },
+
+    speakers = {
+      MAGIC = {
+        zone = "RADIO_MAGIC",
+        frequency = 251000000,
+        modulation = "AM",
+        power = 100,
+      },
+      TOWER = {
+        zone = "RADIO_TOWER",
+        frequency = 250000000,
+        modulation = "AM",
+        power = 100,
+      },
+      MUDSHARK = {
+        zone = "RADIO_PLAYER",
+        frequency = 251000000,
+        modulation = "AM",
+        power = 50,
+      },
+      YOU = {
+        zone = "RADIO_PLAYER",
+        frequency = 251000000,
+        modulation = "AM",
+        power = 50,
+      },
+      ["SEMBACH TOWER"] = {
+        zone = "RADIO_TOWER",
+        frequency = 250000000,
+        modulation = "AM",
+        power = 100,
+      },
+      ["COLT-1"] = {
+        zone = "RADIO_MAGIC",
+        frequency = 251000000,
+        modulation = "AM",
+        power = 100,
+      },
+      ["ENFIELD-6"] = {
+        zone = "RADIO_MAGIC",
+        frequency = 251000000,
+        modulation = "AM",
+        power = 100,
+      },
+      SPRENDLINGEN = {
+        zone = "RADIO_SPRENDLINGEN",
+        frequency = 255950000,
+        modulation = "AM",
+        power = 100,
+      },
+    },
+
+    -- The table name lets GMS resolve the Mission 08 voice file at playback
+    -- time. The direct lines assignment is convenient when the table was
+    -- already loaded before this config.
+    linesTable = "GMS_VOICE_OVERS",
+    lines = GMS_VOICE_OVERS or {},
+
+    eventMap = {
+      ["player.runway_takeoff"] = { id = 815, once = true },
+      ["player.weapon.fired.rifle"] = { id = 887, cooldown = 15 },
+      -- ["player.zone.target.enter"] = { id = 820, once = true, delay = 2 },
+    },
   },
 
   -- DCS trigger zones to watch.

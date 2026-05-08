@@ -11,11 +11,15 @@ Quick start:
 2) Edit the copied config file. It must define the global table GMS_CONFIG.
    This is where you configure flags, zones, fuel thresholds, and watches.
 
-3) In the Mission Editor, load files in this order:
+3) If the mission uses a separate voice-over table, load that file first.
+   The filename can be mission-specific, but it should define GMS_VOICE_OVERS.
+
+4) In the Mission Editor, load files in this order:
+   DO SCRIPT FILE -> MyMission_VoiceOvers.lua (only if used)
    DO SCRIPT FILE -> MyMission_GMS_Config.lua
    DO SCRIPT FILE -> GeneralMissionScript.lua
 
-4) Use Mission Editor triggers against the flags configured in GMS_CONFIG.
+5) Use Mission Editor triggers against the flags configured in GMS_CONFIG.
 
 If no config file is loaded first, GMS starts with defaults, but no mission
 flags are mapped.
@@ -24,7 +28,7 @@ flags are mapped.
 GMS_CONFIG = GMS_CONFIG or {}
 GMS = GMS or {}
 
-GMS.version = "0.1.0"
+GMS.version = "0.2.0"
 GMS.started = GMS.started or false
 GMS.playersByUnitName = GMS.playersByUnitName or {}
 GMS.handlers = GMS.handlers or {}
@@ -45,6 +49,27 @@ local DEFAULT_CONFIG = {
   playerGroupNames = {},
 
   flagRules = {},
+
+  voice = {
+    enabled = false,
+    defaultMode = "sound",
+    subtitle = true,
+    subtitleFormat = "[%s] %s",
+    missingLineWarning = true,
+    linesTable = nil,
+    lines = {},
+    eventMap = {},
+    speakers = {},
+    radio = {
+      defaultZone = nil,
+      defaultFrequency = 251000000,
+      defaultModulation = "AM",
+      defaultPower = 100,
+      defaultLoop = false,
+      fallbackToSound = true,
+      namePrefix = "GMS_VOICE_",
+    },
+  },
 
   fuel = {
     enabled = true,
@@ -121,6 +146,10 @@ local function mergeTable(base, override)
 end
 
 GMS.config = mergeTable(DEFAULT_CONFIG, GMS_CONFIG)
+GMS.voice = GMS.voice or {}
+GMS.voice.played = GMS.voice.played or {}
+GMS.voice.lastPlayed = GMS.voice.lastPlayed or {}
+GMS.voice.transmissionIndex = GMS.voice.transmissionIndex or 0
 
 local function dcsLog(level, message)
   local text = string.format("[%s] %s", GMS.config.logPrefix or "GMS", tostring(message))
@@ -319,6 +348,246 @@ local function scheduleOnce(delaySeconds, fn)
   end
 end
 
+local function getNow()
+  if timer and timer.getTime then
+    return timer.getTime()
+  end
+  return 0
+end
+
+local function getVoiceConfig()
+  return GMS.config.voice or {}
+end
+
+local function getVoiceLines(voiceConfig)
+  if type(voiceConfig.lines) == "table" and listHasAnyValues(voiceConfig.lines) then
+    return voiceConfig.lines
+  end
+
+  if type(voiceConfig.linesTable) == "string" and _G and type(_G[voiceConfig.linesTable]) == "table" then
+    return _G[voiceConfig.linesTable]
+  end
+
+  if type(voiceConfig.lines) == "table" then
+    return voiceConfig.lines
+  end
+
+  return {}
+end
+
+local function getVoiceLine(id)
+  local voiceConfig = getVoiceConfig()
+  local lines = getVoiceLines(voiceConfig)
+  return lines[id] or lines[tostring(id)]
+end
+
+local function getVoiceSpeaker(line)
+  local voiceConfig = getVoiceConfig()
+  local speakerName = line and (line.speaker or line.unitName)
+  local speakers = voiceConfig.speakers or {}
+  return speakerName, speakerName and speakers[speakerName] or nil
+end
+
+local function getVoiceSubtitle(line)
+  if not line then
+    return nil
+  end
+
+  return line.subtitle or line.text
+end
+
+local function getVoiceFile(line)
+  if not line then
+    return nil
+  end
+
+  return line.file or line.oggFile or line.sound
+end
+
+local function formatVoiceSubtitle(line)
+  local subtitle = getVoiceSubtitle(line)
+  if not subtitle then
+    return nil
+  end
+
+  local voiceConfig = getVoiceConfig()
+  local speakerName = line.speaker or line.unitName
+
+  if speakerName and speakerName ~= "" then
+    return string.format(voiceConfig.subtitleFormat or "[%s] %s", speakerName, subtitle)
+  end
+
+  return subtitle
+end
+
+local function showVoiceSubtitle(line)
+  local voiceConfig = getVoiceConfig()
+  if voiceConfig.subtitle == false or line.subtitleEnabled == false then
+    return
+  end
+
+  local text = formatVoiceSubtitle(line)
+  if text and trigger and trigger.action and trigger.action.outText then
+    trigger.action.outText(text, tonumber(line.duration) or tonumber(line.subtitleDuration) or 5)
+  end
+end
+
+local function normalizeRadioModulation(value)
+  local text = string.upper(tostring(value or "AM"))
+  if text == "FM" or text == "1" then
+    return 1
+  end
+  return 0
+end
+
+local function getRadioPoint(zoneName)
+  if not zoneName or not trigger or not trigger.misc or not trigger.misc.getZone then
+    return nil
+  end
+
+  local zone = safeCall(function()
+    return trigger.misc.getZone(zoneName)
+  end, nil)
+
+  return zone and zone.point or nil
+end
+
+local function nextRadioTransmissionName(id)
+  local voiceConfig = getVoiceConfig()
+  local radioConfig = voiceConfig.radio or {}
+  GMS.voice.transmissionIndex = GMS.voice.transmissionIndex + 1
+  return string.format("%s%s_%d", radioConfig.namePrefix or "GMS_VOICE_", tostring(id), GMS.voice.transmissionIndex)
+end
+
+local function playVoiceAsSound(line)
+  local file = getVoiceFile(line)
+  if file and trigger and trigger.action and trigger.action.outSound then
+    trigger.action.outSound(file)
+  end
+  showVoiceSubtitle(line)
+end
+
+local function playVoiceAsRadio(id, line)
+  local voiceConfig = getVoiceConfig()
+  local radioConfig = voiceConfig.radio or {}
+  local speakerName, speaker = getVoiceSpeaker(line)
+  speaker = speaker or {}
+
+  local zoneName = line.zone or speaker.zone or radioConfig.defaultZone
+  local point = getRadioPoint(zoneName)
+  local file = getVoiceFile(line)
+
+  if file and point and trigger and trigger.action and trigger.action.radioTransmission then
+    local frequency = tonumber(line.frequency or speaker.frequency or radioConfig.defaultFrequency) or 251000000
+    local power = tonumber(line.power or speaker.power or radioConfig.defaultPower) or 100
+    local modulation = normalizeRadioModulation(line.modulation or speaker.modulation or radioConfig.defaultModulation)
+    local loop = line.loop == true or speaker.loop == true or radioConfig.defaultLoop == true
+    local transmissionName = line.transmissionName or nextRadioTransmissionName(id)
+
+    trigger.action.radioTransmission(file, point, modulation, loop, frequency, power, transmissionName)
+    showVoiceSubtitle(line)
+    return
+  end
+
+  if radioConfig.fallbackToSound ~= false then
+    GMS.warn(string.format("Voice %s could not use radio mode%s; falling back to sound.", tostring(id), speakerName and (" for " .. speakerName) or ""))
+    playVoiceAsSound(line)
+  else
+    GMS.warn("Voice " .. tostring(id) .. " could not use radio mode.")
+    showVoiceSubtitle(line)
+  end
+end
+
+local function shouldPlayVoiceMapping(eventName, mapping, index)
+  local id = mapping and mapping.id
+  if id == nil then
+    return false
+  end
+
+  local key = mapping.key or (eventName .. ":" .. tostring(id) .. ":" .. tostring(index or 1))
+  if mapping.once and GMS.voice.played[key] then
+    return false
+  end
+
+  local now = getNow()
+  local cooldown = tonumber(mapping.cooldown)
+  if cooldown and GMS.voice.lastPlayed[key] and now - GMS.voice.lastPlayed[key] < cooldown then
+    return false
+  end
+
+  GMS.voice.played[key] = true
+  GMS.voice.lastPlayed[key] = now
+  return true
+end
+
+function GMS.voice.play(id, options)
+  local voiceConfig = getVoiceConfig()
+  if voiceConfig.enabled == false then
+    return false
+  end
+
+  local line = getVoiceLine(id)
+  if not line then
+    if voiceConfig.missingLineWarning ~= false then
+      GMS.warn("Voice line not found: " .. tostring(id))
+    end
+    return false
+  end
+
+  options = options or {}
+  local mode = options.mode or line.mode or voiceConfig.defaultMode or "sound"
+
+  if mode == "radio" then
+    playVoiceAsRadio(id, line)
+  else
+    playVoiceAsSound(line)
+  end
+
+  return true
+end
+
+function GMS.voice.onEvent(eventName, eventData)
+  local voiceConfig = getVoiceConfig()
+  if voiceConfig.enabled == false then
+    return
+  end
+
+  local eventMap = voiceConfig.eventMap or {}
+  local mappings = eventMap[eventName]
+  if not mappings then
+    return
+  end
+
+  if type(mappings) ~= "table" or mappings.id then
+    mappings = { mappings }
+  end
+
+  for index, mapping in ipairs(mappings) do
+    if type(mapping) == "number" or type(mapping) == "string" then
+      mapping = { id = mapping }
+    end
+
+    if shouldPlayVoiceMapping(eventName, mapping, index) then
+      local delay = tonumber(mapping.delay) or 0
+      local function playMappedVoice()
+        GMS.voice.play(mapping.id, { eventName = eventName, eventData = eventData, mode = mapping.mode })
+      end
+
+      if delay > 0 then
+        scheduleOnce(delay, playMappedVoice)
+      else
+        playMappedVoice()
+      end
+    end
+  end
+end
+
+if triggerVoiceOver == nil then
+  function triggerVoiceOver(id)
+    return GMS.voice.play(id)
+  end
+end
+
 local function applySingleFlagRule(eventName, eventData, rule)
   if type(rule) ~= "table" or not rule.flag then
     return
@@ -404,6 +673,9 @@ function GMS.emit(eventName, data)
 
   GMS.log("Event: " .. eventName)
   applyFlagRules(eventName, data)
+  safeCall(function()
+    GMS.voice.onEvent(eventName, data)
+  end, nil)
   runHandlers(eventName, data)
 end
 

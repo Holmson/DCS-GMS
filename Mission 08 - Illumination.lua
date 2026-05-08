@@ -1,12 +1,14 @@
 --[[
-  Vereinfachtes Voice Over System – alles in einer Datei
-  Verwendung:
-    1. Im Mission Editor per "DO SCRIPT FILE" laden
-    2. Dann per "DO SCRIPT" z. B. triggerVoiceOver(101) aufrufen
-    3. Timing wird ausschließlich über den Mission Editor gesteuert
+  Mission 08 voice-over table for GeneralMissionScript.lua.
+
+  Load this file before the GMS mission config. The config can then use:
+    linesTable = "GMS_VOICE_OVERS"
+    lines = GMS_VOICE_OVERS or {}
+
+  GMS provides triggerVoiceOver(id) after GeneralMissionScript.lua is loaded.
 --]]
 
-local voiceOvers = {
+GMS_VOICE_OVERS = {
   [801] = {
     oggFile = "AUDIO/801.ogg",
     subtitle = "Two, radio check on victor.",
@@ -609,19 +611,7 @@ local voiceOvers = {
   },
 }
 
-local function playVoiceOver(voiceOver)
-    local msg = "[" .. voiceOver.unitName .. "] " .. voiceOver.subtitle
-    trigger.action.outSound(voiceOver.oggFile)
-    trigger.action.outText(msg, voiceOver.duration)
-end
-
-function triggerVoiceOver(id)
-    local voiceOver = voiceOvers[id]
-    if voiceOver then
-        playVoiceOver(voiceOver)
-    else
-        trigger.action.outText("Voice-Over ID " .. tostring(id) .. " nicht gefunden.", 10)
-    end
-end
-
-trigger.action.outText("Voice Over System geladen – bereit für triggerVoiceOver(ID)", 5)
+-- Playback is handled by GeneralMissionScript.lua.
+-- Load this file before the GMS mission config so the config can use:
+--   lines = GMS_VOICE_OVERS
+MISSION_08_VOICE_OVERS = GMS_VOICE_OVERS

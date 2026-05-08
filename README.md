@@ -3,6 +3,8 @@
 Reusable Lua helper for DCS single-player missions. It uses only the native DCS
 mission scripting API: no MIST, no MOOSE.
 
+Current script version: `0.2.0`.
+
 ## Files
 
 - `GeneralMissionScript.lua`: the reusable library. Load it in every mission,
@@ -10,23 +12,33 @@ mission scripting API: no MIST, no MOOSE.
 - `GMS_Config_Template.lua`: copy this file per mission, rename it, and edit the
   copy. This is where your Mission Editor flags, zones, fuel thresholds, and
   watches go.
+- `Mission 08 - Illumination.lua`: example mission voice-over table. It stores
+  voice IDs, audio file paths, subtitles, speakers, and durations for one
+  mission.
+- `CHANGELOG.md`: short version history.
 
 ## Load Order
 
 1. Copy `GMS_Config_Template.lua` for your mission, for example
    `MyMission_GMS_Config.lua`.
 2. Edit your copied config file.
-3. In the Mission Editor, add a `DO SCRIPT FILE` action that loads your config
+3. If the mission uses a separate voice-over table, add a `DO SCRIPT FILE`
+   action for that file first. The filename can be different for every mission.
+4. In the Mission Editor, add a `DO SCRIPT FILE` action that loads your config
    file.
-4. Add a second `DO SCRIPT FILE` action that loads `GeneralMissionScript.lua`.
+5. Add a final `DO SCRIPT FILE` action that loads `GeneralMissionScript.lua`.
 
 `GMS_CONFIG` must be loaded before `GeneralMissionScript.lua`, because the main
-script reads the config while it is loading.
+script reads the config while it is loading. If your config references an
+external voice-over table directly, load that voice file before the config.
+The default convention is that every mission-specific voice file defines the
+same global table name: `GMS_VOICE_OVERS`.
 
 Recommended Mission Editor load order:
 
 ```text
 MISSION START
+  DO SCRIPT FILE -> MyMission_VoiceOvers.lua  (only if used)
   DO SCRIPT FILE -> MyMission_GMS_Config.lua
   DO SCRIPT FILE -> GeneralMissionScript.lua
 ```
@@ -293,6 +305,110 @@ You can also set a custom event name:
 Then use `mission.low_altitude_warning`,
 `mission.low_altitude_warning.enter`, and `mission.low_altitude_warning.clear`
 in `flagRules`.
+
+## Voice-Over Module
+
+Voice-over support is optional. Leave `voice.enabled = false` if a mission does
+not need it.
+
+The voice module can be used in two ways:
+
+- manually from the Mission Editor with `GMS.voice.play(815)` or
+  `triggerVoiceOver(815)`
+- automatically from GMS events with `voice.eventMap`
+
+Recommended setup with a separate voice-over table:
+
+```lua
+-- MyMission_VoiceOvers.lua
+GMS_VOICE_OVERS = {
+  [815] = {
+    oggFile = "AUDIO/715.ogg",
+    subtitle = "Hawg Two Two, wheels up.",
+    unitName = "YOU",
+    duration = 3.0,
+  },
+}
+```
+
+The mission config then references that table instead of copying all voice
+lines into `GMS_CONFIG`:
+
+```lua
+GMS_CONFIG = {
+  voice = {
+    enabled = true,
+    defaultMode = "sound",
+
+    linesTable = "GMS_VOICE_OVERS",
+    lines = GMS_VOICE_OVERS or {},
+
+    eventMap = {
+      ["player.runway_takeoff"] = { id = 815, once = true },
+    },
+  },
+}
+```
+
+`linesTable` is the global table name from the voice file. `lines` is the direct
+table reference when the voice file was already loaded before the config. Using
+the same table name in every mission means only the `DO SCRIPT FILE` action has
+to point to the mission-specific voice file.
+
+With `defaultMode = "sound"`, GMS uses:
+
+- `trigger.action.outSound(file)`
+- `trigger.action.outText(subtitle, duration)`
+
+Radio-based setup:
+
+```lua
+GMS_CONFIG = {
+  voice = {
+    enabled = true,
+    defaultMode = "radio",
+    linesTable = "GMS_VOICE_OVERS",
+    lines = GMS_VOICE_OVERS or {},
+
+    speakers = {
+      MAGIC = {
+        zone = "RADIO_MAGIC",
+        frequency = 251000000,
+        modulation = "AM",
+        power = 100,
+      },
+    },
+
+    eventMap = {
+      ["player.zone.target.enter"] = { id = 820, once = true },
+    },
+  },
+}
+```
+
+With `defaultMode = "radio"`, GMS uses `trigger.action.radioTransmission`.
+The sender position comes from the Mission Editor trigger zone configured for
+the speaker, for example `RADIO_MAGIC`. Subtitles are still shown through
+`outText` because that is robust and independent from radio reception.
+
+Speaker names must match the `unitName`/`speaker` values in the voice table.
+For Mission 08 examples, that means names like `YOU`, `MUDSHARK`, `MAGIC`,
+`SEMBACH TOWER`, or `SPRENDLINGEN`.
+
+Radio notes:
+
+- `frequency` is in Hz, so 251 MHz is `251000000`.
+- `modulation` can be `"AM"` or `"FM"`.
+- `fallbackToSound = true` in `voice.radio` lets GMS fall back to normal
+  `outSound` if the radio zone is missing.
+
+Event mapping options:
+
+- `once = true`: play only once per mission.
+- `cooldown = 15`: do not play again until 15 seconds have passed.
+- `delay = 2`: wait 2 seconds before playing.
+- `mode = "radio"` or `mode = "sound"`: override the default mode for this
+  mapping.
 
 ## Event Reference
 
