@@ -11,11 +11,13 @@ Quick start:
 2) Edit the copied config file. It must define the global table GMS_CONFIG.
    This is where you configure flags, zones, fuel thresholds, and watches.
 
-3) If the mission uses a separate voice-over table, load that file first.
-   The filename can be mission-specific, but it should define GMS_VOICE_OVERS.
+3) If the mission uses separate voice-over or sequence tables, load those
+   files first. Filenames can be mission-specific, but the tables should define
+   GMS_VOICE_OVERS and optionally GMS_VOICE_SEQUENCES.
 
 4) In the Mission Editor, load files in this order:
    DO SCRIPT FILE -> MyMission_VoiceOvers.lua (only if used)
+   DO SCRIPT FILE -> MyMission_VoiceSequences.lua (only if used)
    DO SCRIPT FILE -> MyMission_GMS_Config.lua
    DO SCRIPT FILE -> GeneralMissionScript.lua
 
@@ -28,7 +30,7 @@ flags are mapped.
 GMS_CONFIG = GMS_CONFIG or {}
 GMS = GMS or {}
 
-GMS.version = "0.2.0"
+GMS.version = "0.2.1"
 GMS.started = GMS.started or false
 GMS.playersByUnitName = GMS.playersByUnitName or {}
 GMS.handlers = GMS.handlers or {}
@@ -56,8 +58,12 @@ local DEFAULT_CONFIG = {
     subtitle = true,
     subtitleFormat = "[%s] %s",
     missingLineWarning = true,
+    missingSequenceWarning = true,
+    sequenceGap = 0,
     linesTable = nil,
     lines = {},
+    sequencesTable = nil,
+    sequences = {},
     eventMap = {},
     speakers = {},
     radio = {
@@ -381,6 +387,49 @@ local function getVoiceLine(id)
   return lines[id] or lines[tostring(id)]
 end
 
+local function getVoiceSequences(voiceConfig)
+  if type(voiceConfig.sequences) == "table" and listHasAnyValues(voiceConfig.sequences) then
+    return voiceConfig.sequences
+  end
+
+  if type(voiceConfig.sequencesTable) == "string" and _G and type(_G[voiceConfig.sequencesTable]) == "table" then
+    return _G[voiceConfig.sequencesTable]
+  end
+
+  if type(voiceConfig.sequences) == "table" then
+    return voiceConfig.sequences
+  end
+
+  return {}
+end
+
+local function getVoiceSequence(name)
+  local voiceConfig = getVoiceConfig()
+  local sequences = getVoiceSequences(voiceConfig)
+  return sequences[name] or sequences[tostring(name)]
+end
+
+local function getVoiceLineDuration(id, step)
+  if type(step) == "table" and step.duration ~= nil then
+    return tonumber(step.duration) or 0
+  end
+
+  local line = getVoiceLine(id)
+  if not line then
+    return 0
+  end
+
+  return tonumber(line.duration) or tonumber(line.subtitleDuration) or 0
+end
+
+local function getVoiceSequenceSteps(sequence)
+  if type(sequence) ~= "table" then
+    return nil
+  end
+
+  return sequence.lines or sequence.steps or sequence
+end
+
 local function getVoiceSpeaker(line)
   local voiceConfig = getVoiceConfig()
   local speakerName = line and (line.speaker or line.unitName)
@@ -499,12 +548,22 @@ local function playVoiceAsRadio(id, line)
 end
 
 local function shouldPlayVoiceMapping(eventName, mapping, index)
-  local id = mapping and mapping.id
-  if id == nil then
+  local targetType = nil
+  local targetValue = nil
+
+  if mapping and mapping.id ~= nil then
+    targetType = "id"
+    targetValue = mapping.id
+  elseif mapping and mapping.sequence ~= nil then
+    targetType = "sequence"
+    targetValue = mapping.sequence
+  end
+
+  if targetValue == nil then
     return false
   end
 
-  local key = mapping.key or (eventName .. ":" .. tostring(id) .. ":" .. tostring(index or 1))
+  local key = mapping.key or (eventName .. ":" .. targetType .. ":" .. tostring(targetValue) .. ":" .. tostring(index or 1))
   if mapping.once and GMS.voice.played[key] then
     return false
   end
@@ -518,6 +577,18 @@ local function shouldPlayVoiceMapping(eventName, mapping, index)
   GMS.voice.played[key] = true
   GMS.voice.lastPlayed[key] = now
   return true
+end
+
+local function scheduleVoiceLine(delay, id, options)
+  local function playStep()
+    GMS.voice.play(id, options)
+  end
+
+  if delay > 0 then
+    scheduleOnce(delay, playStep)
+  else
+    playStep()
+  end
 end
 
 function GMS.voice.play(id, options)
@@ -546,6 +617,66 @@ function GMS.voice.play(id, options)
   return true
 end
 
+function GMS.voice.playSequence(name, options)
+  local voiceConfig = getVoiceConfig()
+  if voiceConfig.enabled == false then
+    return false
+  end
+
+  local sequence = getVoiceSequence(name)
+  if not sequence then
+    if voiceConfig.missingSequenceWarning ~= false then
+      GMS.warn("Voice sequence not found: " .. tostring(name))
+    end
+    return false
+  end
+
+  local steps = getVoiceSequenceSteps(sequence)
+  if type(steps) ~= "table" then
+    GMS.warn("Voice sequence has no playable lines: " .. tostring(name))
+    return false
+  end
+
+  options = options or {}
+  local sequenceMode = options.mode or sequence.mode
+  local defaultGap = tonumber(sequence.gap or voiceConfig.sequenceGap) or 0
+  local cursor = tonumber(options.delay or sequence.delay) or 0
+  local playedAny = false
+
+  for index, step in ipairs(steps) do
+    if type(step) == "number" or type(step) == "string" then
+      step = { id = step }
+    end
+
+    if type(step) == "table" and step.id ~= nil then
+      local gap = 0
+      if index > 1 then
+        gap = tonumber(step.gap or step.after or step.delay or defaultGap) or 0
+      elseif step.delay ~= nil then
+        gap = tonumber(step.delay) or 0
+      end
+
+      cursor = cursor + gap
+
+      scheduleVoiceLine(cursor, step.id, {
+        eventName = options.eventName,
+        eventData = options.eventData,
+        mode = step.mode or sequenceMode,
+      })
+
+      cursor = cursor + getVoiceLineDuration(step.id, step)
+      playedAny = true
+    end
+  end
+
+  if not playedAny then
+    GMS.warn("Voice sequence has no playable lines: " .. tostring(name))
+    return false
+  end
+
+  return true
+end
+
 function GMS.voice.onEvent(eventName, eventData)
   local voiceConfig = getVoiceConfig()
   if voiceConfig.enabled == false then
@@ -558,7 +689,7 @@ function GMS.voice.onEvent(eventName, eventData)
     return
   end
 
-  if type(mappings) ~= "table" or mappings.id then
+  if type(mappings) ~= "table" or mappings.id or mappings.sequence then
     mappings = { mappings }
   end
 
@@ -570,7 +701,11 @@ function GMS.voice.onEvent(eventName, eventData)
     if shouldPlayVoiceMapping(eventName, mapping, index) then
       local delay = tonumber(mapping.delay) or 0
       local function playMappedVoice()
-        GMS.voice.play(mapping.id, { eventName = eventName, eventData = eventData, mode = mapping.mode })
+        if mapping.sequence ~= nil then
+          GMS.voice.playSequence(mapping.sequence, { eventName = eventName, eventData = eventData, mode = mapping.mode })
+        else
+          GMS.voice.play(mapping.id, { eventName = eventName, eventData = eventData, mode = mapping.mode })
+        end
       end
 
       if delay > 0 then
@@ -585,6 +720,12 @@ end
 if triggerVoiceOver == nil then
   function triggerVoiceOver(id)
     return GMS.voice.play(id)
+  end
+end
+
+if triggerVoiceSequence == nil then
+  function triggerVoiceSequence(name)
+    return GMS.voice.playSequence(name)
   end
 end
 

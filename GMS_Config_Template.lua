@@ -4,6 +4,7 @@
 -- If you use a separate voice-over table, load that voice file before this
 -- config file. The filename can be mission-specific, but the table should be
 -- named GMS_VOICE_OVERS unless you change voice.linesTable below.
+-- Optional voice sequence files should define GMS_VOICE_SEQUENCES.
 
 GMS_CONFIG = {
   -- Debug is helpful while testing a mission. Turn debugToScreen off for the
@@ -122,7 +123,8 @@ GMS_CONFIG = {
   -- defaultMode = "radio" uses radioTransmission + outText.
   -- A mission voice file can have any filename, but should define the
   -- GMS_VOICE_OVERS table.
-  -- Keep the voice lines there and only map GMS events to voice IDs here.
+  -- Optional sequence files should define GMS_VOICE_SEQUENCES. Keep long
+  -- voice content there and only map GMS events to IDs or sequence names here.
   voice = {
     enabled = false,
     defaultMode = "sound",
@@ -190,14 +192,20 @@ GMS_CONFIG = {
       },
     },
 
-    -- The table name lets GMS resolve the Mission 08 voice file at playback
+    -- The table name lets GMS resolve the mission voice file at playback
     -- time. The direct lines assignment is convenient when the table was
     -- already loaded before this config.
     linesTable = "GMS_VOICE_OVERS",
     lines = GMS_VOICE_OVERS or {},
 
+    -- Optional table for dialogue blocks. The sequence file can be loaded with
+    -- any filename as long as it defines GMS_VOICE_SEQUENCES.
+    sequencesTable = "GMS_VOICE_SEQUENCES",
+    sequences = GMS_VOICE_SEQUENCES or {},
+
     eventMap = {
       ["player.runway_takeoff"] = { id = 815, once = true },
+      -- ["player.runway_takeoff"] = { sequence = "departure_wheels_up", once = true },
       ["player.weapon.fired.rifle"] = { id = 887, cooldown = 15 },
       -- ["player.zone.target.enter"] = { id = 820, once = true, delay = 2 },
     },

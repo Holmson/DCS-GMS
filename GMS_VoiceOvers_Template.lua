@@ -1,5 +1,5 @@
 --[[
-  Mission 08 voice-over table for GeneralMissionScript.lua.
+  Voice-over table template for GeneralMissionScript.lua.
 
   Load this file before the GMS mission config. The config can then use:
     linesTable = "GMS_VOICE_OVERS"
@@ -614,4 +614,3 @@ GMS_VOICE_OVERS = {
 -- Playback is handled by GeneralMissionScript.lua.
 -- Load this file before the GMS mission config so the config can use:
 --   lines = GMS_VOICE_OVERS
-MISSION_08_VOICE_OVERS = GMS_VOICE_OVERS

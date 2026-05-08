@@ -3,7 +3,7 @@
 Reusable Lua helper for DCS single-player missions. It uses only the native DCS
 mission scripting API: no MIST, no MOOSE.
 
-Current script version: `0.2.0`.
+Current script version: `0.2.1`.
 
 ## Files
 
@@ -12,9 +12,12 @@ Current script version: `0.2.0`.
 - `GMS_Config_Template.lua`: copy this file per mission, rename it, and edit the
   copy. This is where your Mission Editor flags, zones, fuel thresholds, and
   watches go.
-- `Mission 08 - Illumination.lua`: example mission voice-over table. It stores
+- `GMS_VoiceOvers_Template.lua`: optional template for a mission voice-over
+  table. It stores
   voice IDs, audio file paths, subtitles, speakers, and durations for one
   mission.
+- `GMS_VoiceSequences_Template.lua`: optional template for dialogue blocks that
+  play multiple voice IDs in sequence.
 - `CHANGELOG.md`: short version history.
 
 ## Load Order
@@ -22,8 +25,9 @@ Current script version: `0.2.0`.
 1. Copy `GMS_Config_Template.lua` for your mission, for example
    `MyMission_GMS_Config.lua`.
 2. Edit your copied config file.
-3. If the mission uses a separate voice-over table, add a `DO SCRIPT FILE`
-   action for that file first. The filename can be different for every mission.
+3. If the mission uses separate voice-over or sequence tables, add
+   `DO SCRIPT FILE` actions for those files first. Filenames can be different
+   for every mission.
 4. In the Mission Editor, add a `DO SCRIPT FILE` action that loads your config
    file.
 5. Add a final `DO SCRIPT FILE` action that loads `GeneralMissionScript.lua`.
@@ -31,14 +35,16 @@ Current script version: `0.2.0`.
 `GMS_CONFIG` must be loaded before `GeneralMissionScript.lua`, because the main
 script reads the config while it is loading. If your config references an
 external voice-over table directly, load that voice file before the config.
-The default convention is that every mission-specific voice file defines the
-same global table name: `GMS_VOICE_OVERS`.
+The default convention is that every mission-specific voice file defines
+`GMS_VOICE_OVERS`, and every optional sequence file defines
+`GMS_VOICE_SEQUENCES`.
 
 Recommended Mission Editor load order:
 
 ```text
 MISSION START
   DO SCRIPT FILE -> MyMission_VoiceOvers.lua  (only if used)
+  DO SCRIPT FILE -> MyMission_VoiceSequences.lua  (only if used)
   DO SCRIPT FILE -> MyMission_GMS_Config.lua
   DO SCRIPT FILE -> GeneralMissionScript.lua
 ```
@@ -311,10 +317,12 @@ in `flagRules`.
 Voice-over support is optional. Leave `voice.enabled = false` if a mission does
 not need it.
 
-The voice module can be used in two ways:
+The voice module can be used in several ways:
 
 - manually from the Mission Editor with `GMS.voice.play(815)` or
   `triggerVoiceOver(815)`
+- manually from the Mission Editor with `GMS.voice.playSequence("intro")` or
+  `triggerVoiceSequence("intro")`
 - automatically from GMS events with `voice.eventMap`
 
 Recommended setup with a separate voice-over table:
@@ -343,6 +351,9 @@ GMS_CONFIG = {
     linesTable = "GMS_VOICE_OVERS",
     lines = GMS_VOICE_OVERS or {},
 
+    sequencesTable = "GMS_VOICE_SEQUENCES",
+    sequences = GMS_VOICE_SEQUENCES or {},
+
     eventMap = {
       ["player.runway_takeoff"] = { id = 815, once = true },
     },
@@ -354,6 +365,47 @@ GMS_CONFIG = {
 table reference when the voice file was already loaded before the config. Using
 the same table name in every mission means only the `DO SCRIPT FILE` action has
 to point to the mission-specific voice file.
+
+Optional dialogue sequences live in a separate table:
+
+```lua
+-- MyMission_VoiceSequences.lua
+GMS_VOICE_SEQUENCES = {
+  departure_wheels_up = {
+    { id = 813 },
+    { id = 814, gap = 0.5 },
+    { id = 815, gap = 2.0 },
+  },
+}
+```
+
+The sequence file contains only the order and timing of existing voice IDs. GMS
+uses each line's `duration` from `GMS_VOICE_OVERS` before starting the next
+line. `gap` adds an extra pause before that line starts.
+
+Load the sequence file before the mission config, then reference it there:
+
+```lua
+voice = {
+  enabled = true,
+  linesTable = "GMS_VOICE_OVERS",
+  lines = GMS_VOICE_OVERS or {},
+  sequencesTable = "GMS_VOICE_SEQUENCES",
+  sequences = GMS_VOICE_SEQUENCES or {},
+
+  eventMap = {
+    ["player.runway_takeoff"] = { sequence = "departure_wheels_up", once = true },
+    ["player.weapon.fired.rifle"] = { id = 887, cooldown = 15 },
+  },
+}
+```
+
+From the Mission Editor, use `DO SCRIPT`:
+
+```lua
+GMS.voice.play(813)
+GMS.voice.playSequence("departure_wheels_up")
+```
 
 With `defaultMode = "sound"`, GMS uses:
 
@@ -391,9 +443,8 @@ The sender position comes from the Mission Editor trigger zone configured for
 the speaker, for example `RADIO_MAGIC`. Subtitles are still shown through
 `outText` because that is robust and independent from radio reception.
 
-Speaker names must match the `unitName`/`speaker` values in the voice table.
-For Mission 08 examples, that means names like `YOU`, `MUDSHARK`, `MAGIC`,
-`SEMBACH TOWER`, or `SPRENDLINGEN`.
+Speaker names must match the `unitName`/`speaker` values in the voice table,
+for example `YOU`, `MUDSHARK`, `MAGIC`, `SEMBACH TOWER`, or `SPRENDLINGEN`.
 
 Radio notes:
 
@@ -404,11 +455,20 @@ Radio notes:
 
 Event mapping options:
 
+- `id = 815`: play one voice line.
+- `sequence = "departure"`: play a named sequence from `GMS_VOICE_SEQUENCES`.
 - `once = true`: play only once per mission.
 - `cooldown = 15`: do not play again until 15 seconds have passed.
 - `delay = 2`: wait 2 seconds before playing.
 - `mode = "radio"` or `mode = "sound"`: override the default mode for this
   mapping.
+
+Sequence options:
+
+- `gap = 0.5`: add a pause before the line starts.
+- `duration = 8`: override the voice line duration for this sequence step.
+- `mode = "radio"` or `mode = "sound"`: override playback for one line or one
+  whole sequence.
 
 ## Event Reference
 
