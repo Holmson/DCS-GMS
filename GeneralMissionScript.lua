@@ -30,12 +30,16 @@ flags are mapped.
 GMS_CONFIG = GMS_CONFIG or {}
 GMS = GMS or {}
 
-GMS.version = "0.2.1"
+GMS.version = "0.2.2"
 GMS.started = GMS.started or false
 GMS.playersByUnitName = GMS.playersByUnitName or {}
 GMS.handlers = GMS.handlers or {}
 GMS.watchState = GMS.watchState or {}
 GMS.missionStartedEmitted = GMS.missionStartedEmitted or false
+GMS.reportPrompts = GMS.reportPrompts or {}
+GMS.reportPrompts.active = GMS.reportPrompts.active or {}
+GMS.reportPrompts.reported = GMS.reportPrompts.reported or {}
+GMS.reportPrompts.groupMenus = GMS.reportPrompts.groupMenus or {}
 
 local DEFAULT_CONFIG = {
   debug = false,
@@ -51,6 +55,16 @@ local DEFAULT_CONFIG = {
   playerGroupNames = {},
 
   flagRules = {},
+
+  reportPrompts = {
+    enabled = false,
+    menuRoot = "GMS Reports",
+    messageSeconds = 10,
+    alertSound = nil,
+    removeOnReport = true,
+    emitAfterVoice = true,
+    prompts = {},
+  },
 
   voice = {
     enabled = false,
@@ -233,6 +247,11 @@ end
 local function getGroupName(unit)
   local group = safeMethod(unit, "getGroup")
   return safeMethod(group, "getName")
+end
+
+local function getGroupId(unit)
+  local group = safeMethod(unit, "getGroup")
+  return safeMethod(group, "getID")
 end
 
 local function getPlayerName(unit)
@@ -591,6 +610,43 @@ local function scheduleVoiceLine(delay, id, options)
   end
 end
 
+local function getVoiceSequenceDuration(name)
+  local voiceConfig = getVoiceConfig()
+  local sequence = getVoiceSequence(name)
+  local steps = getVoiceSequenceSteps(sequence)
+  if type(steps) ~= "table" then
+    return 0
+  end
+
+  local defaultGap = tonumber(sequence.gap or voiceConfig.sequenceGap) or 0
+  local cursor = tonumber(sequence.delay) or 0
+  local playedAny = false
+
+  for index, step in ipairs(steps) do
+    if type(step) == "number" or type(step) == "string" then
+      step = { id = step }
+    end
+
+    if type(step) == "table" and step.id ~= nil then
+      local gap = 0
+      if index > 1 then
+        gap = tonumber(step.gap or step.after or step.delay or defaultGap) or 0
+      elseif step.delay ~= nil then
+        gap = tonumber(step.delay) or 0
+      end
+
+      cursor = cursor + gap + getVoiceLineDuration(step.id, step)
+      playedAny = true
+    end
+  end
+
+  if not playedAny then
+    return 0
+  end
+
+  return cursor
+end
+
 function GMS.voice.play(id, options)
   local voiceConfig = getVoiceConfig()
   if voiceConfig.enabled == false then
@@ -677,6 +733,10 @@ function GMS.voice.playSequence(name, options)
   return true
 end
 
+function GMS.voice.getSequenceDuration(name)
+  return getVoiceSequenceDuration(name)
+end
+
 function GMS.voice.onEvent(eventName, eventData)
   local voiceConfig = getVoiceConfig()
   if voiceConfig.enabled == false then
@@ -726,6 +786,262 @@ end
 if triggerVoiceSequence == nil then
   function triggerVoiceSequence(name)
     return GMS.voice.playSequence(name)
+  end
+end
+
+local function getReportPromptConfig()
+  return GMS.config.reportPrompts or {}
+end
+
+local function getReportPromptGroupId(eventData)
+  if not eventData then
+    return nil
+  end
+
+  if eventData.groupId then
+    return eventData.groupId
+  end
+
+  if eventData.player and eventData.player.groupId then
+    return eventData.player.groupId
+  end
+
+  return getGroupId(eventData.unit)
+end
+
+local function getReportPromptKey(promptId, groupId)
+  return tostring(groupId or "global") .. ":" .. tostring(promptId)
+end
+
+local function copyEventData(eventData)
+  local result = {}
+  for k, v in pairs(eventData or {}) do
+    result[k] = v
+  end
+  return result
+end
+
+local function showReportPromptMessage(groupId, message, seconds)
+  if not message or not trigger or not trigger.action then
+    return
+  end
+
+  if groupId and trigger.action.outTextForGroup then
+    safeCall(function()
+      trigger.action.outTextForGroup(groupId, message, seconds)
+    end, nil)
+  elseif trigger.action.outText then
+    safeCall(function()
+      trigger.action.outText(message, seconds)
+    end, nil)
+  end
+end
+
+local function playReportPromptAlert(groupId, soundFile)
+  if not soundFile or not trigger or not trigger.action then
+    return
+  end
+
+  if groupId and trigger.action.outSoundForGroup then
+    safeCall(function()
+      trigger.action.outSoundForGroup(groupId, soundFile)
+    end, nil)
+  elseif trigger.action.outSound then
+    safeCall(function()
+      trigger.action.outSound(soundFile)
+    end, nil)
+  end
+end
+
+local function getReportMenuRoot(groupId, reportConfig)
+  if reportConfig.menuRoot == false then
+    return nil
+  end
+
+  if GMS.reportPrompts.groupMenus[groupId] then
+    return GMS.reportPrompts.groupMenus[groupId]
+  end
+
+  if missionCommands and missionCommands.addSubMenuForGroup then
+    local rootName = reportConfig.menuRoot or "GMS Reports"
+    GMS.reportPrompts.groupMenus[groupId] = safeCall(function()
+      return missionCommands.addSubMenuForGroup(groupId, rootName)
+    end, nil)
+    return GMS.reportPrompts.groupMenus[groupId]
+  end
+
+  return nil
+end
+
+local function removeReportPromptCommand(state)
+  if not state or not state.commandPath or not missionCommands or not missionCommands.removeItemForGroup then
+    return
+  end
+
+  safeCall(function()
+    missionCommands.removeItemForGroup(state.groupId, state.commandPath)
+  end, nil)
+end
+
+local function emitReportPromptEvent(promptId, prompt, sourceData)
+  local reportEvent = prompt.reportEvent
+  if not reportEvent and prompt.triggerEvent then
+    reportEvent = prompt.triggerEvent .. ".reported"
+  end
+  reportEvent = reportEvent or ("report_prompt." .. normalizeId(promptId) .. ".reported")
+
+  local data = copyEventData(sourceData)
+  data.reportPrompt = promptId
+  data.reportPromptMenuText = prompt.menuText
+  data.sourceEventName = sourceData and sourceData.eventName
+  data.state = true
+
+  GMS.emit(reportEvent, data)
+end
+
+local function completeReportPrompt(stateKey)
+  local state = GMS.reportPrompts.active[stateKey]
+  if not state then
+    return
+  end
+
+  local prompt = state.prompt
+  local reportConfig = getReportPromptConfig()
+
+  if prompt.removeOnReport ~= false and reportConfig.removeOnReport ~= false then
+    removeReportPromptCommand(state)
+  end
+
+  GMS.reportPrompts.active[stateKey] = nil
+  GMS.reportPrompts.reported[stateKey] = true
+
+  local voiceDelay = 0
+  local voicePlayed = false
+  if prompt.sequence then
+    voicePlayed = GMS.voice.playSequence(prompt.sequence, { eventData = state.eventData, mode = prompt.mode })
+    if voicePlayed then
+      voiceDelay = getVoiceSequenceDuration(prompt.sequence)
+    end
+  elseif prompt.voiceId or prompt.id then
+    local voiceId = prompt.voiceId or prompt.id
+    voicePlayed = GMS.voice.play(voiceId, { eventData = state.eventData, mode = prompt.mode })
+    if voicePlayed then
+      voiceDelay = getVoiceLineDuration(voiceId)
+    end
+  end
+
+  local delay = 0
+  if prompt.reportDelay ~= nil then
+    delay = tonumber(prompt.reportDelay) or 0
+  elseif prompt.emitAfterVoice == false or reportConfig.emitAfterVoice == false then
+    delay = 0
+  else
+    delay = voiceDelay + (tonumber(prompt.afterVoiceDelay) or 0)
+  end
+
+  local function emitReported()
+    emitReportPromptEvent(state.promptId, prompt, state.eventData)
+  end
+
+  if delay > 0 then
+    scheduleOnce(delay, emitReported)
+  else
+    emitReported()
+  end
+end
+
+local function createReportPrompt(promptId, prompt, eventData)
+  if not missionCommands or not missionCommands.addCommandForGroup then
+    GMS.warn("missionCommands.addCommandForGroup is not available; report prompt skipped: " .. tostring(promptId))
+    return
+  end
+
+  local reportConfig = getReportPromptConfig()
+  local groupId = getReportPromptGroupId(eventData)
+  if not groupId then
+    GMS.warn("Report prompt has no player group id: " .. tostring(promptId))
+    return
+  end
+
+  local stateKey = getReportPromptKey(promptId, groupId)
+  if GMS.reportPrompts.active[stateKey] then
+    return
+  end
+
+  if prompt.once ~= false and GMS.reportPrompts.reported[stateKey] then
+    return
+  end
+
+  local rootPath = getReportMenuRoot(groupId, reportConfig)
+  local menuText = prompt.menuText or prompt.text or tostring(promptId)
+  local commandPath = safeCall(function()
+    return missionCommands.addCommandForGroup(groupId, menuText, rootPath, function()
+      completeReportPrompt(stateKey)
+    end)
+  end, nil)
+
+  if not commandPath then
+    GMS.warn("Could not create report prompt menu command: " .. tostring(promptId))
+    return
+  end
+
+  GMS.reportPrompts.active[stateKey] = {
+    promptId = promptId,
+    prompt = prompt,
+    groupId = groupId,
+    commandPath = commandPath,
+    eventData = copyEventData(eventData),
+  }
+
+  local seconds = tonumber(prompt.messageSeconds or reportConfig.messageSeconds) or 10
+  showReportPromptMessage(groupId, prompt.message or reportConfig.message, seconds)
+
+  local alertSound = prompt.alertSound
+  if alertSound == nil then
+    alertSound = reportConfig.alertSound
+  end
+  playReportPromptAlert(groupId, alertSound)
+end
+
+local function resetReportPrompt(promptId, prompt, eventData)
+  local groupId = getReportPromptGroupId(eventData)
+  if not groupId then
+    return
+  end
+
+  local stateKey = getReportPromptKey(promptId, groupId)
+  local state = GMS.reportPrompts.active[stateKey]
+  if state then
+    removeReportPromptCommand(state)
+    GMS.reportPrompts.active[stateKey] = nil
+  end
+
+  if prompt.once == false then
+    GMS.reportPrompts.reported[stateKey] = nil
+  end
+end
+
+function GMS.reportPrompts.onEvent(eventName, eventData)
+  local reportConfig = getReportPromptConfig()
+  if reportConfig.enabled == false then
+    return
+  end
+
+  for promptId, prompt in pairs(reportConfig.prompts or {}) do
+    if type(prompt) == "table" and prompt.enabled ~= false then
+      if prompt.triggerEvent == eventName then
+        createReportPrompt(promptId, prompt, eventData)
+      end
+
+      local resetEvent = prompt.resetEvent
+      if resetEvent == nil and prompt.triggerEvent then
+        resetEvent = prompt.triggerEvent .. "_reset"
+      end
+
+      if resetEvent == eventName then
+        resetReportPrompt(promptId, prompt, eventData)
+      end
+    end
   end
 end
 
@@ -817,6 +1133,9 @@ function GMS.emit(eventName, data)
   safeCall(function()
     GMS.voice.onEvent(eventName, data)
   end, nil)
+  safeCall(function()
+    GMS.reportPrompts.onEvent(eventName, data)
+  end, nil)
   runHandlers(eventName, data)
 end
 
@@ -860,6 +1179,7 @@ local function makePlayerData(unit, reason)
   player.unit = unit
   player.unitName = unitName
   player.groupName = getGroupName(unit)
+  player.groupId = getGroupId(unit)
   player.playerName = getPlayerName(unit) or player.playerName
   player.typeName = getTypeName(unit)
   player.lastSeen = (timer and timer.getTime and timer.getTime()) or 0
@@ -875,6 +1195,7 @@ local function basePlayerEventData(player, event)
     unit = player and player.unit,
     unitName = player and player.unitName,
     groupName = player and player.groupName,
+    groupId = player and player.groupId,
     playerName = player and player.playerName,
     typeName = player and player.typeName,
     rawEvent = event,

@@ -9,73 +9,73 @@
 --]]
 
 GMS_VOICE_OVERS = {
-  [801] = {
-    oggFile = "AUDIO/801.ogg",
-    subtitle = "Two, radio check on victor.",
+  [1101] = {
+    oggFile = "AUDIO/airborne.ogg",
+    subtitle = "Airborne",
+    unitName = "YOU",
+    duration = 2.0
+  },
+  [1102] = {
+    oggFile = "AUDIO/fox1.ogg",
+    subtitle = "Callsign, Fox One.",
+    unitName = "YOU",
+    duration = 2.0
+  },
+  [1103] = {
+    oggFile = "AUDIO/fox2.ogg",
+    subtitle = "Callsign, Fox Two.",
+    unitName = "YOU",
+    duration = 2.0
+  },
+  [1104] = {
+    oggFile = "AUDIO/fox3.ogg",
+    subtitle = "Callsign, Fox Three.",
+    unitName = "YOU",
+    duration = 2.0
+  },
+  [1105] = {
+    oggFile = "AUDIO/rifle.ogg",
+    subtitle = "Callsign, Rifle.",
+    unitName = "YOU",
+    duration = 2.0
+  },
+  [1106] = {
+    oggFile = "AUDIO/magnum.ogg",
+    subtitle = "Callsign, Magnum.",
+    unitName = "YOU",
+    duration = 2.0
+  },
+  [1107] = {
+    oggFile = "AUDIO/bruiser.ogg",
+    subtitle = "Callsign Bruiser.",
+    unitName = "YOU",
+    duration = 2.0
+  },
+  [1108] = {
+    oggFile = "AUDIO/pickle.ogg",
+    subtitle = "Callsign, Pickle.",
+    unitName = "YOU",
+    duration = 2.0
+  },
+  [1109] = {
+    oggFile = "AUDIO/rockets.ogg",
+    subtitle = "Callsign, rockets away.",
+    unitName = "YOU",
+    duration = 2.0
+  },
+  [1110] = {
+    oggFile = "AUDIO/guns.ogg",
+    subtitle = "Guns, Guns, Guns.",
     unitName = "YOU",
     duration = 3.0
   },
-  [802] = {
-    oggFile = "AUDIO/802.ogg",
-    subtitle = "One, Loud and Clear. No time for chit chat, enemy tanks are rolling towards the rhine river. Let's get those birds in the air.",
-    unitName = "MUDSHARK",
-    duration = 10.0
-  },
-  [803] = {
-    oggFile = "AUDIO/803.ogg",
-    subtitle = "Roger that, two is ready to taxi.",
-    unitName = "YOU",
-    duration = 5.0
-  },
-  [804] = {
-    oggFile = "AUDIO/804.ogg",
-    subtitle = "Sembach Tower, Hawg Two. Two times A-10 at ... parking. Request taxi to active runway.",
-    unitName = "MUDSHARK",
-    duration = 12.0
-  },
-  [805] = {
-    oggFile = "AUDIO/805.ogg",
-    subtitle = "Makes sense ...",
-    unitName = "YOU",
-    duration = 3.0
-  },
-  [806] = {
-    oggFile = "AUDIO/806.ogg",
-    subtitle = "For departure, we follow the tower departure instructions. Once we have reached the ordered flight level, we’ll check in with Magic and proceed to our holding.",
-    unitName = "MUDSHARK",
-    duration = 12.0
-  },
-  [807] = {
-    oggFile = "AUDIO/707.ogg",
-    subtitle = "At holding, we’ll wait for possible tasking from Magic.",
-    unitName = "MUDSHARK",
-    duration = 7.0
-  },
-  [808] = {
-    oggFile = "AUDIO/708.ogg",
-    subtitle = "Once we are finished with our tasking we will return to base.",
-    unitName = "MUDSHARK",
-    duration = 7.0
-  },
-  [809] = {
-    oggFile = "AUDIO/709.ogg",
-    subtitle = "Copy that and Two is ready to taxi.",
-    unitName = "YOU",
-    duration = 5.0
-  },
-  [810] = {
-    oggFile = "AUDIO/810.ogg",
-    subtitle = "Sembach Tower, Hawg Two. Two times A-10 at parking Foxtrot. Request taxi to active runway.",
-    unitName = "MUDSHARK",
-    duration = 8.0
-  },
-  [811] = {
-    oggFile = "AUDIO/811.ogg",
-    subtitle = "Weather is poor today. Light rain and fog, visibility at 5000 feet. Expect omni-directional departure. Cleared to taxi via Foxtrot, Echo and Alpha to runway Two Five.",
+  [1111] = {
+    oggFile = "AUDIO/eject.ogg",
+    subtitle = "Mayday, Mayday, Mayday. Callsign, ejecting!",
     unitName = "SEMBACH TOWER",
     duration = 12.0
   },
-  [812] = {
+  [1112] = {
     oggFile = "AUDIO/812.ogg",
     subtitle = "Cleared to taxi via Foxtrot, Echo and Alpha to runway Two Five, Hawg Two.",
     unitName = "MUDSHARK",
@@ -117,22 +117,22 @@ GMS_VOICE_OVERS = {
     unitName = "MUDSHARK",
     duration = 2.0
   },
-  [819] = {
-    oggFile = "AUDIO/819.ogg",
+  [719] = {
+    oggFile = "AUDIO/719.ogg",
     subtitle = "Magic, Hawg Two. Two A-10s outbound from Sembach, tasked for standby CAS. Climbing FL120, proceeding to holding, checking in.",
-    unitName = "MUDSHARK",
+    unitName = "YOU",
     duration = 10.0
   },
-  [820] = {
-    oggFile = "AUDIO/820.ogg",
+  [720] = {
+    oggFile = "AUDIO/720.ogg",
     subtitle = "Hawg Two, Magic. Sweet, continue as fragged and standby for sitrep.",
     unitName = "MAGIC",
     duration = 6.0
   },
-  [821] = {
-    oggFile = "AUDIO/821.ogg",
+  [721] = {
+    oggFile = "AUDIO/721.ogg",
     subtitle = "Proceeding to holing, Hawg Two.",
-    unitName = "MUDSHARK",
+    unitName = "YOU",
     duration = 4.0
   },
   [822] = {

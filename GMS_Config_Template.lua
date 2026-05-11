@@ -86,11 +86,16 @@ GMS_CONFIG = {
     -- Winchester / ammunition
     ["player.winchester.aa"] = { flag = "winchester_aa", mode = "latch" },
     ["player.winchester.ag"] = { flag = "winchester_ag", mode = "latch" },
+    -- Optional report prompt events. These fire after the player uses the F10
+    -- report menu, not when the state is first detected.
+    ["player.winchester.aa.reported"] = { flag = "winchester_aa_reported", mode = "latch" },
+    ["player.winchester.ag.reported"] = { flag = "winchester_ag_reported", mode = "latch" },
 
     -- Fuel
     ["player.fuel.joker"] = { flag = "joker_fuel", mode = "latch" },
     ["player.fuel.bingo"] = { flag = "bingo_fuel", mode = "latch" },
     ["player.fuel.emergency"] = { flag = "emergency_fuel", mode = "latch" },
+    ["player.fuel.bingo.reported"] = { flag = "bingo_fuel_reported", mode = "latch" },
 
     -- Damage / death
     ["player.ejected"] = { flag = "player_ejected", mode = "latch" },
@@ -124,7 +129,8 @@ GMS_CONFIG = {
   -- A mission voice file can have any filename, but should define the
   -- GMS_VOICE_OVERS table.
   -- Optional sequence files should define GMS_VOICE_SEQUENCES. Keep long
-  -- voice content there and only map GMS events to IDs or sequence names here.
+  -- voice content there and only map GMS events to your voice IDs or sequence
+  -- names here.
   voice = {
     enabled = false,
     defaultMode = "sound",
@@ -134,7 +140,7 @@ GMS_CONFIG = {
     -- Radio mode needs sender zones from the Mission Editor.
     -- Frequencies are in Hz, so 251 MHz is 251000000.
     radio = {
-      defaultZone = "RADIO_MAGIC",
+      defaultZone = "RADIO_PLAYER",
       defaultFrequency = 251000000,
       defaultModulation = "AM",
       defaultPower = 100,
@@ -142,51 +148,47 @@ GMS_CONFIG = {
     },
 
     speakers = {
-      MAGIC = {
-        zone = "RADIO_MAGIC",
-        frequency = 251000000,
-        modulation = "AM",
-        power = 100,
-      },
-      TOWER = {
-        zone = "RADIO_TOWER",
-        frequency = 250000000,
-        modulation = "AM",
-        power = 100,
-      },
-      MUDSHARK = {
-        zone = "RADIO_PLAYER",
-        frequency = 251000000,
-        modulation = "AM",
-        power = 50,
-      },
+      -- Speaker names must match unitName/speaker values in GMS_VOICE_OVERS.
+      -- Replace these examples with the callsigns used by your mission.
       YOU = {
         zone = "RADIO_PLAYER",
         frequency = 251000000,
         modulation = "AM",
         power = 50,
       },
-      ["SEMBACH TOWER"] = {
+      PLAYER_TOWER = {
+        zone = "RADIO_PLAYER",
+        frequency = 251000000,
+        modulation = "AM",
+        power = 50,
+      },
+      PLAYER_AWACS = {
+        zone = "RADIO_PLAYER",
+        frequency = 251000000,
+        modulation = "AM",
+        power = 50,
+      },
+      PLAYER_SPECIAL = {
+        zone = "RADIO_PLAYER",
+        frequency = 251000000,
+        modulation = "AM",
+        power = 50,
+      },
+      SEMBACH_TOWER = {
         zone = "RADIO_TOWER",
         frequency = 250000000,
         modulation = "AM",
         power = 100,
       },
-      ["COLT-1"] = {
-        zone = "RADIO_MAGIC",
-        frequency = 251000000,
+      MAGIC = {
+        zone = "RADIO_AWACS",
+        frequency = 377800000,
         modulation = "AM",
         power = 100,
       },
-      ["ENFIELD-6"] = {
-        zone = "RADIO_MAGIC",
+      WINGMAN = {
+        zone = "RADIO_WINGMAN",
         frequency = 251000000,
-        modulation = "AM",
-        power = 100,
-      },
-      SPRENDLINGEN = {
-        zone = "RADIO_SPRENDLINGEN",
-        frequency = 255950000,
         modulation = "AM",
         power = 100,
       },
@@ -204,10 +206,68 @@ GMS_CONFIG = {
     sequences = GMS_VOICE_SEQUENCES or {},
 
     eventMap = {
-      ["player.runway_takeoff"] = { id = 815, once = true },
+      -- Replace these IDs with IDs from your GMS_VOICE_OVERS table.
+      ["player.runway_takeoff"] = { id = 1101, once = false },
+      ["player.weapon.fired.fox1"] = { id = 1102, cooldown = 4 },
+      ["player.weapon.fired.fox2"] = { id = 1103, cooldown = 4 },
+      ["player.weapon.fired.fox3"] = { id = 1104, cooldown = 4 },
+      ["player.weapon.fired.rifle"] = { id = 1105, cooldown = 4 },
+      ["player.weapon.fired.magnum"] = { id = 1106, cooldown = 4 },
+      ["player.weapon.fired.bruiser"] = { id = 1107, cooldown = 4 },
+      ["player.weapon.fired.bomb"] = { id = 1108, cooldown = 4 },
+      ["player.weapon.droped.bomb"] = { id = 1108, cooldown = 4 },
+      ["player.weapon.fired.rockets"] = { id = 1109, cooldown = 4 },
+      ["player.weapon.gun_start"] = { id = 1110, cooldown = 4 },
+      ["player.ejected"] = { id = 1111, once = true },
       -- ["player.runway_takeoff"] = { sequence = "departure_wheels_up", once = true },
-      ["player.weapon.fired.rifle"] = { id = 887, cooldown = 15 },
-      -- ["player.zone.target.enter"] = { id = 820, once = true, delay = 2 },
+      --["player.weapon.fired.rifle"] = { id = 1002, cooldown = 15 },
+      -- ["player.zone.target.enter"] = { id = 1003, once = true, delay = 2 },
+    },
+  },
+
+  -- Optional F10 report prompts.
+  --
+  -- Detection events stay separate from report events. For example:
+  -- player.fuel.bingo          -> GMS detected bingo fuel
+  -- player.fuel.bingo.reported -> player used the F10 report menu
+  reportPrompts = {
+    enabled = false,
+    menuRoot = "GMS Reports",
+    alertSound = "AUDIO/alert.ogg",
+    messageSeconds = 15,
+    removeOnReport = true,
+    emitAfterVoice = true,
+
+    prompts = {
+      bingo_fuel = {
+        triggerEvent = "player.fuel.bingo",
+        resetEvent = "player.fuel.bingo_reset",
+        reportEvent = "player.fuel.bingo.reported",
+        menuText = "BINGO FUEL",
+        message = "You have reached bingo fuel - use F10 radio menu to report.",
+        sequence = "report_bingo_fuel",
+        once = true,
+      },
+
+      winchester_ag = {
+        triggerEvent = "player.winchester.ag",
+        resetEvent = "player.winchester.ag_reset",
+        reportEvent = "player.winchester.ag.reported",
+        menuText = "WINCHESTER A/G",
+        message = "You are winchester - use F10 radio menu to report.",
+        sequence = "report_winchester_ag",
+        once = true,
+      },
+
+      winchester_aa = {
+        triggerEvent = "player.winchester.aa",
+        resetEvent = "player.winchester.aa_reset",
+        reportEvent = "player.winchester.aa.reported",
+        menuText = "WINCHESTER A/A",
+        message = "You are winchester - use F10 radio menu to report your weapons state.",
+        sequence = "report_winchester_aa",
+        once = true,
+      },
     },
   },
 

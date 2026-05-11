@@ -3,7 +3,38 @@
 Reusable Lua helper for DCS single-player missions. It uses only the native DCS
 mission scripting API: no MIST, no MOOSE.
 
-Current script version: `0.2.1`.
+Current script version: `0.2.2`.
+
+## Overview
+
+General Mission Script, or GMS, is a mission helper layer for DCS
+single-player missions. It listens to native DCS events, adds a small amount of
+polling for things DCS does not emit as direct events, and turns the results into
+stable mission flags you can use in the Mission Editor.
+
+The main idea is to keep recurring mission logic out of individual trigger
+stacks. Instead of rebuilding the same checks in every mission, you configure
+GMS once per mission and let it set DCS user flags, play voice-overs, or emit
+named events when something relevant happens.
+
+Typical uses include:
+
+- setting Mission Editor flags when the player takes off, lands, dies, ejects,
+  fires weapons, hits targets, scores kills, or reaches fuel thresholds
+- tracking player aircraft type, engine state, AAR start/stop, runway takeoff,
+  landing location, zone entry/exit, no-fly-zone violations, and objective
+  watches for units, groups, or static objects
+- using flag modes like latch, state, counter, and pulse to make Mission Editor
+  triggers easier to read and reuse
+- adding optional in-game debug output while testing a mission
+- playing optional voice-over lines or dialogue sequences from GMS events or
+  directly from Mission Editor `DO SCRIPT` actions
+- creating optional F10 report prompts so the player can actively report states
+  like bingo fuel or winchester before a separate `.reported` event is emitted
+
+GMS is meant to stay mission-agnostic. The reusable script lives in
+`GeneralMissionScript.lua`; mission-specific flags, zones, fuel thresholds,
+voice tables, and event mappings live in separate config/template files.
 
 ## Files
 
@@ -470,6 +501,78 @@ Sequence options:
 - `mode = "radio"` or `mode = "sound"`: override playback for one line or one
   whole sequence.
 
+## Report Prompts
+
+Report prompts are optional F10 radio menu prompts for cases where GMS detects a
+state, but the mission should continue only after the player actively reports
+it. This keeps detection and player acknowledgement separate.
+
+Example:
+
+- `player.fuel.bingo`: GMS detected bingo fuel.
+- `player.fuel.bingo.reported`: the player used the F10 report menu.
+
+That means the Mission Editor can react to either stage. If you want the mission
+to wait for the radio report, map your action to the `.reported` event:
+
+```lua
+flagRules = {
+  ["player.fuel.bingo"] = { flag = "bingo_detected", mode = "latch" },
+  ["player.fuel.bingo.reported"] = { flag = "bingo_fuel", mode = "latch" },
+}
+```
+
+Config example:
+
+```lua
+reportPrompts = {
+  enabled = true,
+  menuRoot = "GMS Reports",
+  alertSound = "AUDIO/alert.ogg",
+  messageSeconds = 10,
+
+  prompts = {
+    bingo_fuel = {
+      triggerEvent = "player.fuel.bingo",
+      resetEvent = "player.fuel.bingo_reset",
+      reportEvent = "player.fuel.bingo.reported",
+      menuText = "BINGO FUEL",
+      message = "You have reached bingo fuel - use F10 radio menu to report your fuel state.",
+      sequence = "report_bingo_fuel",
+      once = true,
+    },
+
+    winchester_ag = {
+      triggerEvent = "player.winchester.ag",
+      reportEvent = "player.winchester.ag.reported",
+      menuText = "WINCHESTER A/G",
+      message = "You are winchester - use F10 radio menu to report your weapons state.",
+      sequence = "report_winchester_ag",
+      once = true,
+    },
+  },
+}
+```
+
+When the trigger event fires, GMS adds the configured F10 command for the
+player's group, shows the message, and optionally plays `alertSound`. When the
+player selects the F10 command, GMS removes the command, plays the configured
+voice line or sequence, and then emits `reportEvent`. With the default
+`emitAfterVoice = true`, the `.reported` event is delayed until the voice
+line/sequence has finished.
+
+Useful options:
+
+- `triggerEvent`: event that creates the F10 prompt.
+- `reportEvent`: event emitted after the player reports.
+- `resetEvent`: optional event that clears the prompt state if `once = false`.
+- `menuText`: F10 command text.
+- `message`: on-screen instruction shown when the prompt is created.
+- `alertSound`: optional sound played when the prompt is created.
+- `sequence`: optional voice sequence played after the player reports.
+- `voiceId`: optional single voice line played after the player reports.
+- `once = true`: do not show this prompt again for the same player group.
+
 ## Event Reference
 
 Recommended flag mode is only a starting point. You can map any event to any
@@ -590,6 +693,10 @@ These are emitted for `player.weapon.fired.*` and, where applicable,
   mode: `pulse`.
 - `player.winchester.bombs_reset`: bombs available again. Suggested mode:
   `pulse`.
+- `player.winchester.aa.reported`: optional report prompt event after the
+  player reports A/A winchester through F10. Suggested mode: `latch`.
+- `player.winchester.ag.reported`: optional report prompt event after the
+  player reports A/G winchester through F10. Suggested mode: `latch`.
 
 ### Fuel
 
@@ -607,6 +714,8 @@ These are emitted for `player.weapon.fired.*` and, where applicable,
   margin. Suggested mode: `pulse`.
 - `player.fuel.increased`: fuel increased, for example through AAR. Suggested
   mode: `counter` or `pulse`.
+- `player.fuel.bingo.reported`: optional report prompt event after the player
+  reports bingo fuel through F10. Suggested mode: `latch`.
 
 ### Damage / Death
 

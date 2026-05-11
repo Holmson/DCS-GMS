@@ -8,10 +8,10 @@
 GMS_VOICE_SEQUENCES = {
   -- Simple sequence: GMS waits for each voice line's duration before playing
   -- the next line. gap adds an extra pause before that line starts.
-  departure_wheels_up = {
-    { id = 813 },
-    { id = 814, gap = 0.5 },
-    { id = 815, gap = 2.0 },
+  magic_check_in = {
+    { id = 719 },
+    { id = 720, gap = 1.0 },
+    { id = 721, gap = 1.0 },
   },
 
   -- Sequence-level options are optional. mode overrides the default voice mode

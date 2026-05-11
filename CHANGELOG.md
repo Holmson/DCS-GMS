@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.2 - 2026-05-09
+
+- Added optional F10 report prompts through `reportPrompts`.
+- Added separate `.reported` events for player acknowledgements, such as
+  `player.fuel.bingo.reported` and `player.winchester.ag.reported`.
+- Added report prompt support for alert sounds, on-screen instructions, and
+  voice lines or voice sequences before emitting the reported event.
+- Bumped script version to `0.2.2`.
+
 ## 0.2.1 - 2026-05-08
 
 - Added optional voice sequence support through `GMS_VOICE_SEQUENCES`.
